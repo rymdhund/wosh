@@ -1,7 +1,6 @@
 package main
 
 import (
-  "strings"
   "github.com/rymdhund/wosh/ast"
   "github.com/rymdhund/wosh/lexer"
 )
@@ -131,6 +130,14 @@ func (tr *TokenReader) expect(tok lexer.Token) bool {
   }
 }
 
+func (tr *TokenReader) expectGet(tok lexer.Token) (lexer.TokenItem, bool) {
+  if tr.peekToken() == tok {
+    return tr.pop(), true
+  } else {
+    return lexer.TokenItem{}, false
+  }
+}
+
 func filterSpace(items []lexer.TokenItem) []lexer.TokenItem {
   res := []lexer.TokenItem{}
   for _, item := range items {
@@ -141,29 +148,75 @@ func filterSpace(items []lexer.TokenItem) []lexer.TokenItem {
   return res
 }
 
+type ParserError struct {
+  msg string
+  pos lexer.Position
+}
+
 type Parser struct {
   source string
   tokens *TokenReader
+  errors []ParserError
 }
 
 func NewParser(input string) *Parser {
-  p := Parser{input, nil}
+  p := Parser{input, nil, []ParserError{}}
   return &p
 }
 
+func (p* Parser) error(msg string, pos lexer.Position) {
+  err := ParserError{msg, pos}
+  p.errors = append(p.errors, err)
+}
+
 func (p* Parser) Parse() ast.Expr {
-  l := lexer.NewLexer(strings.NewReader(p.source))
+  l := lexer.NewLexer(p.source)
   tokens := l.Lex()
   withoutSpace := filterSpace(tokens)
   tr := NewTokenReader(withoutSpace)
   p.tokens = tr
 
-  x, ok := p.parsePrimary()
+  x, ok := p.parsePipeExpr()
   if ok {
     return x
   }
   return nil
 }
+
+// PipeExpr ->
+//   | RedirectExpr ('|[oe]' PipeExpr)*
+func (p *Parser) parsePipeExpr() (ast.Expr, bool) {
+  p.tokens.begin()
+
+  left, ok := p.parsePrimary()  // TODO: make this redirect expr
+  if !ok {
+    p.tokens.rollback()
+    return nil, false
+  }
+
+  pipe, ok := p.tokens.expectGet(lexer.PIPE_OP)
+  if ok {
+    modifiers := pipe.Lit[1:]
+    right, ok := p.parsePipeExpr()
+    if ok {
+      p.tokens.commit()
+      return &ast.PipeExpr{left, right, modifiers}, true
+    } else {
+      // Continue parsing anyway
+      if modifiers != "" {
+        p.error("Expected an expression after this pipe, did you forget a space?", pipe.Pos)
+      } else {
+        p.error("Expected an expression after this pipe", pipe.Pos)
+      }
+      p.tokens.commit()
+      return left, true
+    }
+  }
+
+  p.tokens.commit()
+  return left, true
+}
+
 
 // PrimaryExpr := f
 //  | CallExpr

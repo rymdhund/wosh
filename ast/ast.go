@@ -43,3 +43,11 @@ type CallExpr struct {
 }
 func (t *CallExpr) Pos() lexer.Position { return t.Ident.TPos }
 func (t *CallExpr) exprType()     {}
+
+type PipeExpr struct {
+  Left Expr
+  Right Expr
+  Modifiers string
+}
+func (t *PipeExpr) Pos() lexer.Position { return t.Left.Pos() }
+func (t *PipeExpr) exprType()     {}

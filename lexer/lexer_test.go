@@ -27,6 +27,8 @@ func TestSimpleLex(t *testing.T) {
     {"\n", EOL},
     {"=", OP},
     {"!=", OP},
+    {"|", PIPE_OP},
+    {"|oe", PIPE_OP},
   }
   for _, test := range tests {
     input, expected := test.string, test.Token

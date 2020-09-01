@@ -52,3 +52,18 @@ func TestParseFnCall(t *testing.T) {
     }
   }
 }
+
+func TestParsePipeExpr(t *testing.T) {
+  tests := []string {
+    "abc | def",
+    "f() | g()",
+  }
+  for _, prog := range tests {
+    p := NewParser(prog)
+    tree := p.Parse()
+    _, ok := tree.(*ast.PipeExpr)
+    if !ok {
+      t.Errorf("expected pipe expr, got %+v", tree)
+    }
+  }
+}

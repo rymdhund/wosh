@@ -1,10 +1,7 @@
 package lexer
 
 import (
-  "bufio"
-  "io"
   "unicode"
-  "os"
 )
 
 type Token int
@@ -17,6 +14,8 @@ const (
   EOL
 
   OP
+
+  PIPE_OP
 
   SPACE
 
@@ -37,6 +36,7 @@ var tokens = []string{
   ASSIGN: "=",
   LPAREN: "(",
   RPAREN: ")",
+  PIPE_OP:   "PIPE_OP",
 }
 
 
@@ -57,14 +57,32 @@ type TokenItem struct {
 
 type Lexer struct {
   pos Position
-  reader *bufio.Reader
+  input []rune
+  idx int
 }
 
-func NewLexer(reader io.Reader) *Lexer {
+func NewLexer(input string) *Lexer {
   return &Lexer{
     pos:    Position{0, 0},
-    reader: bufio.NewReader(reader),
+    input: []rune(input),
+    idx: 0,
   }
+}
+
+func (l *Lexer) pop() (rune, bool) {
+  if l.idx >= len(l.input) {
+    return '\x00', false
+  }
+  r := l.input[l.idx]
+  l.idx++
+  return r, true
+}
+
+func (l *Lexer) peek() (rune, bool) {
+  if l.idx >= len(l.input) {
+    return '\x00', false
+  }
+  return l.input[l.idx], true
 }
 
 func (l *Lexer) Lex() []TokenItem {
@@ -83,31 +101,26 @@ func (l *Lexer) Lex() []TokenItem {
 func (l *Lexer) LexTokenItem() TokenItem {
   // keep looping until we return a token
   for {
-    r, _, err := l.reader.ReadRune()
-    if err != nil {
-      if err == io.EOF {
-        return TokenItem{EOF, "", l.pos}
-      }
-
-      // Some unknown error in the reader
-      panic(err)
+    r, ok := l.peek()
+    if !ok {
+      return TokenItem{EOF, "", l.pos}
     }
-    // We only peek on the first rune to know what to lex
-    l.reader.UnreadRune()
 
     switch r {
     case '\n':
-      l.reader.ReadRune()
+      l.pop()
       l.stepLine()
       return TokenItem{EOL, "\n", l.pos}
     case '(':
-      l.reader.ReadRune()
+      l.pop()
       l.step(1)
       return TokenItem{LPAREN, "(", l.pos}
     case ')':
-      l.reader.ReadRune()
+      l.pop()
       l.step(1)
       return TokenItem{RPAREN, ")", l.pos}
+    case '|':
+      return l.lexPipeOp()
     default:
       if isOp(r) {
         return l.lexOp()
@@ -118,7 +131,7 @@ func (l *Lexer) LexTokenItem() TokenItem {
       } else if unicode.IsLetter(r) {
         return l.lexIdent()
       } else {
-        l.reader.ReadRune()
+        l.pop()
         l.step(1)
         return TokenItem{ILLEGAL, string(r), l.pos}
       }
@@ -135,30 +148,19 @@ func (l *Lexer) stepLine() {
   l.pos.Col = 0
 }
 
-func (l *Lexer) backup() {
-  if err := l.reader.UnreadRune(); err != nil {
-    panic(err)
-  }
-
-  l.pos.Col--
-}
-
 func (l *Lexer) takeWhile(f func(rune)bool) string {
   lit := ""
   for {
-    r, _, err := l.reader.ReadRune()
-    if err != nil {
-      if err == io.EOF {
-        // at the end of the int
-        return lit
-      }
-      panic(err)
+    r, ok := l.peek()
+    if !ok {
+      // at the end of input
+      return lit
     }
 
     if f(r) {
       lit = lit + string(r)
+      l.pop()
     } else {
-      l.reader.UnreadRune()
       return lit
     }
   }
@@ -173,15 +175,16 @@ func (l *Lexer) lexNumber() TokenItem {
 }
 
 // Identifier is a letter followed by a number of (letter | digit | underscore)
+func isIdentInner(r rune) bool {
+  return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_'
+}
+
 func (l *Lexer) lexIdent() TokenItem {
-  r, _, err := l.reader.ReadRune()
-  if err != nil {
-    panic(err)
+  r, ok := l.pop()
+  if !ok {
+    panic("couln't pop rune in lexIdent")
   }
-  isIdentRune := func(r rune) bool {
-    return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_'
-  }
-  lit := string(r) + l.takeWhile(isIdentRune)
+  lit := string(r) + l.takeWhile(isIdentInner)
   pos := l.pos
   l.step(len(lit))
   return TokenItem{IDENT, lit, pos}
@@ -211,13 +214,14 @@ func (l *Lexer) lexSpace() TokenItem {
   return TokenItem{SPACE, lit, pos}
 }
 
-
-func main() {
-  file, err := os.Open("input.test")
-  if err != nil {
-    panic(err)
+// a pipe can have a modifier after it like "|oe"
+func (l *Lexer) lexPipeOp() TokenItem {
+  r, ok := l.pop()
+  if !ok {
+    panic("Couldn't pop rune in lexPipeOp")
   }
-
-  lexer := NewLexer(file)
-  lexer.Lex()
+  lit := string(r) + l.takeWhile(isIdentInner)
+  pos := l.pos
+  l.step(len(lit))
+  return TokenItem{PIPE_OP, lit, pos}
 }

@@ -1,7 +1,6 @@
 package lexer
 
 import (
-	"strings"
 	"testing"
 )
 
@@ -35,13 +34,13 @@ func TestSimpleLex(t *testing.T) {
 	}
 	for _, test := range tests {
 		input, expected := test.string, test.Token
-		lexer := NewLexer(strings.NewReader(input))
+		lexer := NewLexer(input)
 		items := lexer.Lex()
 		if len(items) != 2 {
 			t.Errorf("%v has != 2 lex item", items)
 		}
-		if items[0].tok != expected {
-			t.Errorf("%v != %v", items[0].tok, expected)
+		if items[0].Tok != expected {
+			t.Errorf("%v != %v", items[0].Tok, expected)
 		}
 	}
 }

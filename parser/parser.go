@@ -18,7 +18,7 @@ import (
 //   | AssignExpr
 //
 // AssignExpr ->
-//   | IdentExpr "<-[oe]" AssignExpr
+//   | IdentExpr "<-" (ModExpr)? AssignExpr
 //   | IdentExpr "=" AssignExpr
 //   | PipeExpr
 //
@@ -175,15 +175,56 @@ func (p *Parser) Parse() ast.Expr {
 	tr := NewTokenReader(withoutSpace)
 	p.tokens = tr
 
-	x, ok := p.parsePipeExpr()
+	x, ok := p.parseAssignExpr()
 	if ok {
 		return x
 	}
 	return nil
 }
 
+// AssignExpr ->
+//   | IdentExpr "=" AssignExpr
+//   | IdentExpr "<-" (ModExpr)? AssignExpr
+//   | PipeExpr
+func (p *Parser) parseAssignExpr() (ast.Expr, bool) {
+	p.tokens.begin()
+
+	ident, ok := p.parseIdent()
+	if ok {
+		assign, ok := p.tokens.expectGet(lexer.ASSIGN)
+		if ok {
+			right, ok := p.parseAssignExpr()
+			if ok {
+				p.tokens.commit()
+				return &ast.AssignExpr{ident, right}, true
+			} else {
+				// Continue parsing anyway
+				p.error("Expected an expression after this assign", assign.Pos)
+				p.tokens.commit()
+				return &ast.Bad{assign.Pos}, true
+			}
+		}
+		capture, ok := p.tokens.expectGet(lexer.CAPTURE)
+		if ok {
+			right, ok := p.parseAssignExpr()
+			if ok {
+				modifier := capture.Lit[2:]
+				p.tokens.commit()
+				return &ast.CaptureExpr{ident, right, modifier}, true
+			} else {
+				// Continue parsing anyway
+				p.error("Expected an expression after this assign", assign.Pos)
+				p.tokens.commit()
+				return &ast.Bad{assign.Pos}, true
+			}
+		}
+	}
+	p.tokens.rollback()
+	return p.parsePipeExpr()
+}
+
 // PipeExpr ->
-//   | RedirectExpr ('|[oe]' PipeExpr)*
+//   | RedirectExpr ('[12*]|' PipeExpr)*
 func (p *Parser) parsePipeExpr() (ast.Expr, bool) {
 	p.tokens.begin()
 
@@ -195,20 +236,19 @@ func (p *Parser) parsePipeExpr() (ast.Expr, bool) {
 
 	pipe, ok := p.tokens.expectGet(lexer.PIPE_OP)
 	if ok {
-		modifiers := pipe.Lit[1:]
+		mod := ""
+		if len(pipe.Lit) > 1 {
+			mod = string(pipe.Lit[0])
+		}
 		right, ok := p.parsePipeExpr()
 		if ok {
 			p.tokens.commit()
-			return &ast.PipeExpr{left, right, modifiers}, true
+			return &ast.PipeExpr{left, right, mod}, true
 		} else {
 			// Continue parsing anyway
-			if modifiers != "" {
-				p.error("Expected an expression after this pipe, did you forget a space?", pipe.Pos)
-			} else {
-				p.error("Expected an expression after this pipe", pipe.Pos)
-			}
+			p.error("Expected an expression after this pipe, did you forget a space?", pipe.Pos)
 			p.tokens.commit()
-			return left, true
+			return &ast.Bad{pipe.Pos}, true
 		}
 	}
 

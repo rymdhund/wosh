@@ -27,10 +27,17 @@ func TestSimpleLex(t *testing.T) {
 		{"+*-", OP},
 		{" \t ", SPACE},
 		{"\n", EOL},
-		{"=", OP},
+		{"=", ASSIGN},
 		{"!=", OP},
 		{"|", PIPE_OP},
-		{"|oe", PIPE_OP},
+		{"1|", PIPE_OP},
+		{"2|", PIPE_OP},
+		{"*|", PIPE_OP},
+		{"<-", CAPTURE},
+		{"<-1", CAPTURE},
+		{"<-2", CAPTURE},
+		{"<-*", CAPTURE},
+		{"<-?", CAPTURE},
 	}
 	for _, test := range tests {
 		input, expected := test.string, test.Token

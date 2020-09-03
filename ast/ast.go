@@ -54,3 +54,20 @@ type PipeExpr struct {
 
 func (t *PipeExpr) Pos() lexer.Position { return t.Left.Pos() }
 func (t *PipeExpr) exprType()           {}
+
+type CaptureExpr struct {
+	Ident *Ident
+	Right Expr
+	Mod   string
+}
+
+func (t *CaptureExpr) Pos() lexer.Position { return t.Ident.Pos() }
+func (t *CaptureExpr) exprType()           {}
+
+type AssignExpr struct {
+	Ident *Ident
+	Right Expr
+}
+
+func (t *AssignExpr) Pos() lexer.Position { return t.Ident.Pos() }
+func (t *AssignExpr) exprType()           {}

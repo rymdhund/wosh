@@ -16,10 +16,10 @@ const (
 	OP
 
 	PIPE_OP
-
 	SPACE
 
-	ASSIGN // =
+	ASSIGN
+	CAPTURE
 
 	LPAREN
 	RPAREN
@@ -37,6 +37,7 @@ var tokens = []string{
 	LPAREN:  "(",
 	RPAREN:  ")",
 	PIPE_OP: "PIPE_OP",
+	CAPTURE: "CAPTURE",
 }
 
 func (t Token) String() string {
@@ -84,6 +85,19 @@ func (l *Lexer) peek() (rune, bool) {
 	return l.input[l.idx], true
 }
 
+func (l *Lexer) popn(n int) (string, bool) {
+	if l.idx+n > len(l.input) {
+		return "", false
+	}
+	s := string(l.input[l.idx : l.idx+n])
+	l.idx += n
+	return s, true
+}
+
+func (l *Lexer) peekn(n int) string {
+	return string(l.input[l.idx : l.idx+n])
+}
+
 func (l *Lexer) Lex() []TokenItem {
 	items := []TokenItem{}
 	for {
@@ -108,32 +122,56 @@ func (l *Lexer) LexTokenItem() TokenItem {
 		switch r {
 		case '\n':
 			l.pop()
+			t := TokenItem{EOL, "\n", l.pos}
 			l.stepLine()
-			return TokenItem{EOL, "\n", l.pos}
+			return t
+		case '=':
+			l.pop()
+			t := TokenItem{ASSIGN, "=", l.pos}
+			l.stepLine()
+			return t
 		case '(':
 			l.pop()
+			t := TokenItem{LPAREN, "(", l.pos}
 			l.step(1)
-			return TokenItem{LPAREN, "(", l.pos}
+			return t
 		case ')':
 			l.pop()
+			t := TokenItem{RPAREN, ")", l.pos}
 			l.step(1)
-			return TokenItem{RPAREN, ")", l.pos}
+			return t
 		case '|':
-			return l.lexPipeOp()
+			l.pop()
+			t := TokenItem{PIPE_OP, "|", l.pos}
+			l.step(1)
+			return t
 		default:
-			if isOp(r) {
-				return l.lexOp()
-			} else if isSpace(r) {
-				return l.lexSpace()
-			} else if unicode.IsDigit(r) {
-				return l.lexNumber()
-			} else if unicode.IsLetter(r) {
-				return l.lexIdent()
-			} else {
-				l.pop()
-				l.step(1)
-				return TokenItem{ILLEGAL, string(r), l.pos}
-			}
+		}
+
+		// two letter lookahead
+		r2 := l.peekn(2)
+		switch r2 {
+		case "1|", "2|", "*|":
+			l.popn(2)
+			l.step(2)
+			return TokenItem{PIPE_OP, r2, l.pos}
+		case "<-":
+			return l.lexCapture()
+		default:
+		}
+
+		if isOp(r) {
+			return l.lexOp()
+		} else if isSpace(r) {
+			return l.lexSpace()
+		} else if unicode.IsDigit(r) {
+			return l.lexNumber()
+		} else if unicode.IsLetter(r) {
+			return l.lexIdent()
+		} else {
+			l.pop()
+			l.step(1)
+			return TokenItem{ILLEGAL, string(r), l.pos}
 		}
 	}
 }
@@ -213,14 +251,18 @@ func (l *Lexer) lexSpace() TokenItem {
 	return TokenItem{SPACE, lit, pos}
 }
 
-// a pipe can have a modifier after it like "|oe"
-func (l *Lexer) lexPipeOp() TokenItem {
-	r, ok := l.pop()
+// a capture can have a modifier like <-1
+func (l *Lexer) lexCapture() TokenItem {
+	s, ok := l.popn(2)
 	if !ok {
 		panic("Couldn't pop rune in lexPipeOp")
 	}
-	lit := string(r) + l.takeWhile(isIdentInner)
+	m, ok := l.peek()
+	if ok && (m == '1' || m == '2' || m == '*' || m == '?') {
+		l.pop()
+	}
+	lit := s + string(m)
 	pos := l.pos
 	l.step(len(lit))
-	return TokenItem{PIPE_OP, lit, pos}
+	return TokenItem{CAPTURE, lit, pos}
 }

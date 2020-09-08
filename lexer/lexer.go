@@ -23,21 +23,34 @@ const (
 
 	LPAREN
 	RPAREN
+	LBRACE
+	RBRACE
+	LBRACKET
+	RBRACKET
+
+	IF
+	ELSE
 )
 
 var tokens = []string{
-	EOF:     "EOF",
-	ILLEGAL: "ILLEGAL",
-	IDENT:   "IDENT",
-	INT:     "INT",
-	EOL:     "EOL",
-	OP:      "OP",
-	SPACE:   "SPACE",
-	ASSIGN:  "=",
-	LPAREN:  "(",
-	RPAREN:  ")",
-	PIPE_OP: "PIPE_OP",
-	CAPTURE: "CAPTURE",
+	EOF:      "EOF",
+	ILLEGAL:  "ILLEGAL",
+	IDENT:    "IDENT",
+	INT:      "INT",
+	EOL:      "EOL",
+	OP:       "OP",
+	SPACE:    "SPACE",
+	ASSIGN:   "=",
+	LPAREN:   "(",
+	RPAREN:   ")",
+	LBRACE:   "{",
+	RBRACE:   "}",
+	LBRACKET: "[",
+	RBRACKET: "]",
+	PIPE_OP:  "PIPE_OP",
+	CAPTURE:  "CAPTURE",
+	IF:       "IF",
+	ELSE:     "ELSE",
 }
 
 func (t Token) String() string {
@@ -140,6 +153,26 @@ func (l *Lexer) LexTokenItem() TokenItem {
 			t := TokenItem{RPAREN, ")", l.pos}
 			l.step(1)
 			return t
+		case '{':
+			l.pop()
+			t := TokenItem{LBRACE, "{", l.pos}
+			l.step(1)
+			return t
+		case '}':
+			l.pop()
+			t := TokenItem{RBRACE, "}", l.pos}
+			l.step(1)
+			return t
+		case '[':
+			l.pop()
+			t := TokenItem{LBRACKET, "[", l.pos}
+			l.step(1)
+			return t
+		case ']':
+			l.pop()
+			t := TokenItem{RBRACKET, "]", l.pos}
+			l.step(1)
+			return t
 		case '|':
 			l.pop()
 			t := TokenItem{PIPE_OP, "|", l.pos}
@@ -167,7 +200,7 @@ func (l *Lexer) LexTokenItem() TokenItem {
 		} else if unicode.IsDigit(r) {
 			return l.lexNumber()
 		} else if unicode.IsLetter(r) {
-			return l.lexIdent()
+			return l.lexIdentOrKw()
 		} else {
 			l.pop()
 			l.step(1)
@@ -216,7 +249,7 @@ func isIdentInner(r rune) bool {
 	return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_'
 }
 
-func (l *Lexer) lexIdent() TokenItem {
+func (l *Lexer) lexIdentOrKw() TokenItem {
 	r, ok := l.pop()
 	if !ok {
 		panic("couln't pop rune in lexIdent")
@@ -224,7 +257,15 @@ func (l *Lexer) lexIdent() TokenItem {
 	lit := string(r) + l.takeWhile(isIdentInner)
 	pos := l.pos
 	l.step(len(lit))
-	return TokenItem{IDENT, lit, pos}
+
+	switch lit {
+	case "if":
+		return TokenItem{IF, lit, pos}
+	case "else":
+		return TokenItem{ELSE, lit, pos}
+	default:
+		return TokenItem{IDENT, lit, pos}
+	}
 }
 
 // Operators are sequences of +*-=!

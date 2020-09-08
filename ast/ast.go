@@ -71,3 +71,28 @@ type AssignExpr struct {
 
 func (t *AssignExpr) Pos() lexer.Position { return t.Ident.Pos() }
 func (t *AssignExpr) exprType()           {}
+
+type BlockExpr struct {
+	Children []Expr
+	TPos     lexer.Position // need to have pos if children are empty
+}
+
+func (t *BlockExpr) Pos() lexer.Position { return t.TPos }
+func (t *BlockExpr) exprType()           {}
+
+type IfExpr struct {
+	Cond Expr
+	Then Expr
+	Else Expr
+	TPos lexer.Position // need to have pos if children are empty
+}
+
+func (t *IfExpr) Pos() lexer.Position { return t.TPos }
+func (t *IfExpr) exprType()           {}
+
+type Nop struct {
+	TPos lexer.Position
+}
+
+func (t *Nop) Pos() lexer.Position { return t.TPos }
+func (t *Nop) exprType()           {}

@@ -1,18 +1,18 @@
 package parser
 
 import (
+	"fmt"
+
 	"github.com/rymdhund/wosh/ast"
 	"github.com/rymdhund/wosh/lexer"
 )
 
-// StmtBlock ->
-//  | MultiStmt ("\n" MultiStmt)*
+// BlockExpr ->
+//  | MultiExpr ("\n" MultiExpr)*
+//  | epsilon
 //
-// MultiStmt ->
-//   | Stmt (";" MultiStmt)*
-//
-// Stmt ->
-//   | Expr
+// MultiExpr ->
+//   | Expr (";" MultiExpr)*
 //
 // Expr ->
 //   | AssignExpr
@@ -68,32 +68,68 @@ import (
 const DEBUG = true
 
 type TokenReader struct {
-	items        []lexer.TokenItem
-	idx          int
-	transactions []int
+	items                []lexer.TokenItem
+	idx                  int
+	transactions         []int
+	eolSignificanceStack []bool
 }
 
 func NewTokenReader(items []lexer.TokenItem) *TokenReader {
+	if len(items) <= 0 {
+		panic("Expected at least 1 tokenitem in NewTokenReader")
+	}
 	tr := make([]lexer.TokenItem, len(items))
 	copy(tr, items)
-	return &TokenReader{tr, 0, []int{}}
+	return &TokenReader{tr, 0, []int{}, []bool{true}}
+}
+
+// get index by eol significance
+func (tr *TokenReader) headIdx() int {
+	sign := tr.eolSignificanceStack[len(tr.eolSignificanceStack)-1]
+	idx := tr.idx
+	for !sign && tr.items[idx].Tok == lexer.EOL {
+		idx++
+	}
+	return idx
 }
 
 func (tr *TokenReader) peekToken() lexer.Token {
-	if tr.idx >= len(tr.items) {
-		return lexer.EOF
-	}
-	return tr.items[tr.idx].Tok
+	/*
+		if tr.idx >= len(tr.items) {
+			return lexer.EOF
+		}
+	*/
+	return tr.items[tr.headIdx()].Tok
+}
+
+func (tr *TokenReader) peek() lexer.TokenItem {
+	/*
+		if tr.idx >= len(tr.items) {
+			return tr.items[len(tr.items)-1]
+		}
+	*/
+	return tr.items[tr.headIdx()]
 }
 
 // If we pop after the end, just return more of the last token which should be eof
 func (tr *TokenReader) pop() lexer.TokenItem {
-	if tr.idx >= len(tr.items) {
-		return tr.items[len(tr.items)-1]
-	}
-	idx := tr.idx
-	tr.idx += 1
+	/*
+		// we shouldnt pop after an EOF
+			if tr.idx >= len(tr.items) {
+				return tr.items[len(tr.items)-1]
+			}
+	*/
+	idx := tr.headIdx()
+	tr.idx = idx + 1
 	return tr.items[idx]
+}
+
+func (tr *TokenReader) beginEolSignificance(significant bool) {
+	tr.eolSignificanceStack = append(tr.eolSignificanceStack, significant)
+}
+
+func (tr *TokenReader) popEolSignificance() {
+	tr.eolSignificanceStack = tr.eolSignificanceStack[:len(tr.eolSignificanceStack)-1]
 }
 
 // Begin a transaction
@@ -168,18 +204,79 @@ func (p *Parser) error(msg string, pos lexer.Position) {
 	p.errors = append(p.errors, err)
 }
 
-func (p *Parser) Parse() ast.Expr {
+func (p *Parser) showErrors() string {
+	s := ""
+	for i, e := range p.errors {
+		if i > 0 {
+			s += "\n"
+		}
+		s += fmt.Sprintf("%s, line: %d:%d", e.msg, e.pos.Line, e.pos.Col)
+	}
+	return s
+}
+
+func (p *Parser) Parse() (*ast.BlockExpr, error) {
 	l := lexer.NewLexer(p.source)
 	tokens := l.Lex()
 	withoutSpace := filterSpace(tokens)
 	tr := NewTokenReader(withoutSpace)
 	p.tokens = tr
 
-	x, ok := p.parseAssignExpr()
-	if ok {
-		return x
+	expr, _ := p.parseBlockExpr()
+	if len(p.tokens.transactions) != 0 {
+		panic("Uncommited transactions in parser!")
 	}
-	return nil
+	if len(p.tokens.eolSignificanceStack) != 1 {
+		fmt.Printf("stack: %v\n", p.tokens.eolSignificanceStack)
+		panic("Uncommited eol significance stack!")
+	}
+	if !p.tokens.expect(lexer.EOF) {
+		ti := p.tokens.peek()
+		p.error(fmt.Sprintf("Unexpected token '%s'", ti.Lit), ti.Pos)
+	}
+	if len(p.errors) == 0 {
+		return expr, nil
+	}
+	return expr, fmt.Errorf("Errors:\n%s", p.showErrors())
+}
+
+// BlockExpr ->
+//  | "\n"* MultiExpr ("\n"+ MultiExpr)* "\n"*
+//  | epsilon
+func (p *Parser) parseBlockExpr() (*ast.BlockExpr, bool) {
+	p.tokens.begin()
+	p.tokens.beginEolSignificance(true)
+
+	startPos := p.tokens.peek().Pos
+
+	// skip starting newlines
+	for p.tokens.expect(lexer.EOL) {
+	}
+
+	exprs := []ast.Expr{}
+	for {
+		expr, ok := p.parseMultiExpr()
+		if ok {
+			exprs = append(exprs, expr)
+		} else {
+			break
+		}
+
+		if !p.tokens.expect(lexer.EOL) {
+			break
+		}
+		for p.tokens.expect(lexer.EOL) {
+		}
+	}
+
+	p.tokens.popEolSignificance()
+	p.tokens.commit()
+	return &ast.BlockExpr{exprs, startPos}, true
+}
+
+func (p *Parser) parseMultiExpr() (ast.Expr, bool) {
+	// TODO
+	return p.parseAssignExpr()
 }
 
 // AssignExpr ->
@@ -319,6 +416,10 @@ func (p *Parser) parseSubscrExpr() (*ast.CallExpr, bool) {
 }
 
 func (p *Parser) parseAtomExpr() (ast.Expr, bool) {
+	iff, ok := p.parseIfExpr()
+	if ok {
+		return iff, true
+	}
 	lit, ok := p.parseBasicLit()
 	if ok {
 		return lit, true
@@ -344,4 +445,75 @@ func (p *Parser) parseBasicLit() (*ast.BasicLit, bool) {
 		return &ast.BasicLit{item.Pos, item.Tok, item.Lit}, true
 	}
 	return nil, false
+}
+
+func (p *Parser) parseIfExpr() (ast.Expr, bool) {
+	p.tokens.begin()
+
+	iff, ok := p.tokens.expectGet(lexer.IF)
+	if !ok {
+		p.tokens.rollback()
+		return nil, false
+	}
+
+	// ignore EOL
+	p.tokens.beginEolSignificance(false)
+	cond, ok := p.parseMultiExpr()
+	if !ok {
+		// TODO
+		panic("not implemented ifexpr cond error case")
+	}
+
+	_, ok = p.tokens.expectGet(lexer.LBRACE)
+	if !ok {
+		// TODO
+		panic("not implemented ifexpr '{' error case")
+	}
+
+	then, ok := p.parseBlockExpr()
+	if !ok {
+		// TODO
+		panic("not implemented ifexpr then error case")
+	}
+
+	_, ok = p.tokens.expectGet(lexer.RBRACE)
+	if !ok {
+		// TODO
+		fmt.Printf("error %v\n", p.tokens.peek())
+		panic("not implemented ifexpr '}' error case")
+	}
+
+	// We might eat some eols
+	p.tokens.begin()
+	_, ok = p.tokens.expectGet(lexer.ELSE)
+	if !ok {
+		// No else
+		p.tokens.rollback() // Rollback any EOL we ate
+		p.tokens.popEolSignificance()
+		p.tokens.commit() // Commit our if
+		return &ast.IfExpr{cond, then, nil, iff.Pos}, true
+	}
+	p.tokens.commit()
+
+	_, ok = p.tokens.expectGet(lexer.LBRACE)
+	if !ok {
+		// TODO
+		panic("not implemented else expr '{' error case")
+	}
+
+	elsee, ok := p.parseBlockExpr()
+	if !ok {
+		// TODO
+		panic("not implemented else expr error error case")
+	}
+
+	_, ok = p.tokens.expectGet(lexer.RBRACE)
+	if !ok {
+		// TODO
+		panic("not implemented else expr '}' error case")
+	}
+
+	p.tokens.popEolSignificance()
+	p.tokens.commit()
+	return &ast.IfExpr{cond, then, elsee, iff.Pos}, true
 }

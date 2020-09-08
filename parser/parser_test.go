@@ -205,3 +205,28 @@ func TestParseParenthExpr(t *testing.T) {
 		}
 	}
 }
+
+func TestParseAddExpr(t *testing.T) {
+	tests := []struct {
+		string
+	}{
+		{"1 + 2"},
+		{"1 + 2 + 3"},
+	}
+	for _, test := range tests {
+		prog := test.string
+		p := NewParser(prog)
+		exprs, err := p.Parse()
+		if err != nil {
+			t.Error(err)
+		}
+		op, ok := exprs.Children[0].(*ast.OpExpr)
+		if !ok {
+			t.Errorf("Expected OpExpr, got %+v", exprs.Children[0])
+		}
+		if op.Op != "+" {
+			t.Errorf("Expected +")
+
+		}
+	}
+}

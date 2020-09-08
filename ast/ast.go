@@ -104,3 +104,12 @@ type ParenthExpr struct {
 
 func (t *ParenthExpr) Pos() lexer.Position { return t.TPos }
 func (t *ParenthExpr) exprType()           {}
+
+type OpExpr struct {
+	Left  Expr
+	Right Expr
+	Op    string
+}
+
+func (t *OpExpr) Pos() lexer.Position { return t.Left.Pos() }
+func (t *OpExpr) exprType()           {}

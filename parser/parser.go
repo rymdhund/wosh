@@ -219,7 +219,7 @@ func (p *Parser) parseAssignExpr() (ast.Expr, bool) {
 func (p *Parser) parsePipeExpr() (ast.Expr, bool) {
 	p.tokens.begin()
 
-	left, ok := p.parsePrimary() // TODO: make this redirect expr
+	left, ok := p.parseAddExpr() // TODO: make this redirect expr
 	if !ok {
 		p.tokens.rollback()
 		return nil, false
@@ -240,6 +240,35 @@ func (p *Parser) parsePipeExpr() (ast.Expr, bool) {
 			p.error("Expected an expression after this pipe, did you forget a space?", pipe.Pos)
 			p.tokens.commit()
 			return &ast.Bad{pipe.Pos}, true
+		}
+	}
+
+	p.tokens.commit()
+	return left, true
+}
+
+// AddExpr ->
+//   | MultExpr (<add_op> AddExpr)
+func (p *Parser) parseAddExpr() (ast.Expr, bool) {
+	p.tokens.begin()
+
+	left, ok := p.parsePrimary()
+	if !ok {
+		p.tokens.rollback()
+		return nil, false
+	}
+
+	add, ok := p.tokens.expectGetOp("+")
+	if ok {
+		right, ok := p.parseAddExpr()
+		if ok {
+			p.tokens.commit()
+			return &ast.OpExpr{left, right, add.Lit}, true
+		} else {
+			// Continue parsing anyway
+			p.error(fmt.Sprintf("Expected an expression after this '%s'", add.Lit), add.Pos)
+			p.tokens.commit()
+			return &ast.Bad{add.Pos}, true
 		}
 	}
 

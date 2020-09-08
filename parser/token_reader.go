@@ -107,3 +107,12 @@ func (tr *TokenReader) expectGet(tok lexer.Token) (lexer.TokenItem, bool) {
 		return lexer.TokenItem{}, false
 	}
 }
+
+func (tr *TokenReader) expectGetOp(opLiteral string) (lexer.TokenItem, bool) {
+	t := tr.peek()
+	if t.Tok == lexer.OP && t.Lit == opLiteral {
+		return tr.pop(), true
+	} else {
+		return lexer.TokenItem{}, false
+	}
+}

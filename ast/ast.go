@@ -96,3 +96,11 @@ type Nop struct {
 
 func (t *Nop) Pos() lexer.Position { return t.TPos }
 func (t *Nop) exprType()           {}
+
+type ParenthExpr struct {
+	Inside Expr
+	TPos   lexer.Position
+}
+
+func (t *ParenthExpr) Pos() lexer.Position { return t.TPos }
+func (t *ParenthExpr) exprType()           {}

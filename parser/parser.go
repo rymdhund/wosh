@@ -309,6 +309,11 @@ func (p *Parser) parseSubscrExpr() (*ast.CallExpr, bool) {
 	return nil, false
 }
 
+// AtomExpr ->
+//   | IfExpr
+//   | Identifier
+//   | Literal
+//   | Enclosure
 func (p *Parser) parseAtomExpr() (ast.Expr, bool) {
 	iff, ok := p.parseIfExpr()
 	if ok {
@@ -321,6 +326,10 @@ func (p *Parser) parseAtomExpr() (ast.Expr, bool) {
 	ident, ok := p.parseIdent()
 	if ok {
 		return ident, true
+	}
+	par, ok := p.parseParenthExpr()
+	if ok {
+		return par, true
 	}
 	return nil, false
 }
@@ -410,4 +419,32 @@ func (p *Parser) parseIfExpr() (ast.Expr, bool) {
 	p.tokens.popEolSignificance()
 	p.tokens.commit()
 	return &ast.IfExpr{cond, then, elsee, iff.Pos}, true
+}
+
+func (p *Parser) parseParenthExpr() (ast.Expr, bool) {
+	p.tokens.begin()
+
+	left, ok := p.tokens.expectGet(lexer.LPAREN)
+	if !ok {
+		p.tokens.rollback()
+		return nil, false
+	}
+
+	// ignore EOL
+	p.tokens.beginEolSignificance(false)
+	inner, ok := p.parseMultiExpr()
+	if !ok {
+		// TODO
+		panic("not implemented ParenthExpr inner error case")
+	}
+
+	_, ok = p.tokens.expectGet(lexer.RPAREN)
+	if !ok {
+		// TODO
+		panic("not implemented ParenthExpr ')' error case")
+	}
+
+	p.tokens.popEolSignificance()
+	p.tokens.commit()
+	return &ast.ParenthExpr{inner, left.Pos}, true
 }

@@ -181,16 +181,16 @@ func TestParseIfExpr(t *testing.T) {
 	}
 }
 
-/*
-func TestParseEnclosureExpr(t *testing.T) {
+func TestParseParenthExpr(t *testing.T) {
 	tests := []struct {
 		string
 	}{
 		{"(1)"},
 		// Newlines dont matter in pareth exprs
-		{"(1 + \n 2)"},
+		{"(\n1\n)"},
+		{"(a\n=\nb)"},
 		// Newlines matter in code blocks inside parenth exprs
-		{"(if x {\n a=1 \n b = a \n b + 1 } else { 3 })"},
+		{"(if x {\n a=1 \n b = a \n b } else { 3 })"},
 	}
 	for _, test := range tests {
 		prog := test.string
@@ -199,10 +199,9 @@ func TestParseEnclosureExpr(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		_, ok := exprs.Children[0].(*ast.ParethExpr)
+		_, ok := exprs.Children[0].(*ast.ParenthExpr)
 		if !ok {
 			t.Errorf("expected ParenthExpr, got %+v", exprs.Children[0])
 		}
 	}
 }
-*/

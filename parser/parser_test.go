@@ -230,3 +230,27 @@ func TestParseAddExpr(t *testing.T) {
 		}
 	}
 }
+
+func parseForTest(t *testing.T, prog string) *ast.BlockExpr {
+	p := NewParser(prog)
+	exprs, err := p.Parse()
+	if err != nil {
+		t.Error(err)
+	}
+	return exprs
+}
+
+func TestParseMisc(t *testing.T) {
+	tree := parseForTest(t, "a = 1 + 2")
+	assign, ok := tree.Children[0].(*ast.AssignExpr)
+	if !ok {
+		t.Errorf("Expected OpExpr, got %+v", tree.Children[0])
+	}
+	if assign.Ident.Name != "a" {
+		t.Errorf("Invalid name")
+	}
+	add, ok := assign.Right.(*ast.OpExpr)
+	if add.Op != "+" {
+		t.Errorf("Invalid op")
+	}
+}

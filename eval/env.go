@@ -1,21 +1,5 @@
 package eval
 
-// This will probably be an interface
-type Object struct {
-	Type  string
-	Value int
-}
-
-func (o Object) add(o2 Object) Object {
-	if o.Type != "int" {
-		panic("trying to add non-integer")
-	}
-	if o2.Type != "int" {
-		panic("trying to add non-integer")
-	}
-	return Object{"int", o.Value + o2.Value}
-}
-
 type Env struct {
 	vars map[string]Object
 }

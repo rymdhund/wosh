@@ -18,18 +18,22 @@ func NewRunner(ast *ast.BlockExpr) *Runner {
 }
 
 func (runner *Runner) Run() {
-	for _, e := range runner.ast.Children {
-		runner.RunExpr(runner.baseEnv, e)
-	}
+	runner.RunExpr(runner.baseEnv, runner.ast)
 }
 
 func (runner *Runner) RunExpr(env *Env, exp ast.Expr) Object {
 	switch v := exp.(type) {
+	case *ast.BlockExpr:
+		ret := UnitVal
+		for _, expr := range v.Children {
+			ret = runner.RunExpr(env, expr)
+		}
+		return ret
 	case *ast.AssignExpr:
 		obj := runner.RunExpr(env, v.Right)
 		fmt.Printf("assigning %s = %v", v.Ident.Name, obj)
 		env.put(v.Ident.Name, obj)
-		return Object{"nil", 0}
+		return UnitVal
 	case *ast.BasicLit:
 		return objectFromBasicLit(v)
 	case *ast.Ident:
@@ -40,8 +44,21 @@ func (runner *Runner) RunExpr(env *Env, exp ast.Expr) Object {
 		return obj
 	case *ast.OpExpr:
 		return runner.RunOpExpr(env, v)
+	case *ast.IfExpr:
+		cond := runner.RunExpr(env, v.Cond)
+		if cond.Type != "int" {
+			// TODO
+			panic("Not implemented boolean type")
+		}
+		if cond.Value != 0 {
+			return runner.RunExpr(env, v.Then)
+		} else if v.Else != nil {
+			return runner.RunExpr(env, v.Else)
+		} else {
+			return UnitVal
+		}
 	default:
-		panic("Not implemented expression in runner")
+		panic(fmt.Sprintf("Not implemented expression in runner: %+v", exp))
 	}
 }
 

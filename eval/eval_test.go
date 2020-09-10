@@ -44,3 +44,26 @@ func TestEvalAssign2(t *testing.T) {
 		t.Errorf("Expected int(5), got %v", o)
 	}
 }
+
+func TestEvalMany(t *testing.T) {
+	tests := []struct {
+		string
+		Object
+	}{
+		{"res = 1 + 2", IntVal(3)},
+		{"a = 0\nres = 1 + 2", IntVal(3)},
+		{"a = 0\n if a { res = 1 } else { res = 2 }", IntVal(2)},
+		{`if 1 { res = 2 } else { res = 3 }`, IntVal(2)},
+		{`res = if 1 { 2 } else { 3 }`, IntVal(2)},
+		{`res = if 0 { 2 }`, UnitVal},
+	}
+	for _, test := range tests {
+		prog, expected := test.string, test.Object
+		r := runner(t, prog)
+		r.Run()
+		res, _ := r.baseEnv.get("res")
+		if res != expected {
+			t.Errorf("Got %s, expected %s", res, expected)
+		}
+	}
+}

@@ -51,3 +51,17 @@ func TestSimpleLex(t *testing.T) {
 		}
 	}
 }
+
+func TestCaptureLex(t *testing.T) {
+	lexer := NewLexer("1 <- 2")
+	items := lexer.Lex()
+	if len(items) != 6 {
+		t.Fatalf("%v has != 6 lex item", items)
+	}
+	if items[2].Tok != CAPTURE {
+		t.Errorf("%v != %v", items[2].Tok, CAPTURE)
+	}
+	if items[2].Lit != "<-" {
+		t.Errorf("'%s' != '%s'", items[2].Lit, "<-")
+	}
+}

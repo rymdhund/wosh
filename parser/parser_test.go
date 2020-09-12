@@ -254,3 +254,19 @@ func TestParseMisc(t *testing.T) {
 		t.Errorf("Invalid op")
 	}
 }
+
+func TestParseMiscCombinations(t *testing.T) {
+	tests := []struct {
+		string
+	}{
+		{"a <- func(1)"},
+	}
+	for _, test := range tests {
+		prog := test.string
+		p := NewParser(prog)
+		_, err := p.Parse()
+		if err != nil {
+			t.Error(err)
+		}
+	}
+}

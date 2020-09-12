@@ -31,3 +31,10 @@ func StrVal(s string) Object {
 }
 
 var UnitVal = Object{Type: "()", Value: nil}
+
+func (o *Object) GetString() string {
+	if o.Type != "str" {
+		panic(fmt.Sprintf("Tryingt o use value of type '%s' as string", o.Type))
+	}
+	return o.Value.(string)
+}

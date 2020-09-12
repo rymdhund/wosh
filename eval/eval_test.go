@@ -10,7 +10,7 @@ func runner(t *testing.T, prog string) *Runner {
 	p := parser.NewParser(prog)
 	exprs, err := p.Parse()
 	if err != nil {
-		t.Error(err)
+		t.Fatalf("Parsing error: %s", err)
 	}
 	return NewRunner(exprs)
 }
@@ -51,11 +51,13 @@ func TestEvalMany(t *testing.T) {
 		Object
 	}{
 		{"res = 1 + 2", IntVal(3)},
+		{"res = 'abc'", StrVal("abc")},
 		{"a = 0\nres = 1 + 2", IntVal(3)},
 		{"a = 0\n if a { res = 1 } else { res = 2 }", IntVal(2)},
 		{`if 1 { res = 2 } else { res = 3 }`, IntVal(2)},
 		{`res = if 1 { 2 } else { 3 }`, IntVal(2)},
 		{`res = if 0 { 2 }`, UnitVal},
+		{"res <- echo('abc')", StrVal("abc\n")},
 	}
 	for _, test := range tests {
 		prog, expected := test.string, test.Object

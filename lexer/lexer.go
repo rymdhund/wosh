@@ -11,7 +11,9 @@ const (
 	ILLEGAL
 	IDENT
 	INT
+	STRING
 	EOL
+	COMMA
 
 	OP
 
@@ -37,7 +39,9 @@ var tokens = []string{
 	ILLEGAL:  "ILLEGAL",
 	IDENT:    "IDENT",
 	INT:      "INT",
+	STRING:   "STRING",
 	EOL:      "EOL",
+	COMMA:    ",",
 	OP:       "OP",
 	SPACE:    "SPACE",
 	ASSIGN:   "=",
@@ -138,6 +142,11 @@ func (l *Lexer) LexTokenItem() TokenItem {
 			t := TokenItem{EOL, "\n", l.pos}
 			l.stepLine()
 			return t
+		case ',':
+			l.pop()
+			t := TokenItem{COMMA, ",", l.pos}
+			l.stepLine()
+			return t
 		case '=':
 			l.pop()
 			t := TokenItem{ASSIGN, "=", l.pos}
@@ -178,6 +187,8 @@ func (l *Lexer) LexTokenItem() TokenItem {
 			t := TokenItem{PIPE_OP, "|", l.pos}
 			l.step(1)
 			return t
+		case '\'':
+			return l.lexString()
 		default:
 		}
 
@@ -244,6 +255,29 @@ func (l *Lexer) lexNumber() TokenItem {
 	return TokenItem{INT, lit, pos}
 }
 
+func isNot(r rune) func(rune) bool {
+	return func(r2 rune) bool {
+		return r2 != r
+	}
+}
+
+func (l *Lexer) lexString() TokenItem {
+	start, ok := l.pop()
+	if !ok {
+		panic("Expected start of string literal")
+	}
+	lit := string(start) + l.takeWhile(isNot(start))
+	end, ok := l.pop()
+	if !ok {
+		panic("Expected end of string literal")
+	}
+	lit += string(end)
+
+	pos := l.pos
+	l.step(len(lit))
+	return TokenItem{STRING, lit, pos}
+}
+
 // Identifier is a letter followed by a number of (letter | digit | underscore)
 func isIdentInner(r rune) bool {
 	return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_'
@@ -298,11 +332,12 @@ func (l *Lexer) lexCapture() TokenItem {
 	if !ok {
 		panic("Couldn't pop rune in lexPipeOp")
 	}
+	lit := s
 	m, ok := l.peek()
 	if ok && (m == '1' || m == '2' || m == '*' || m == '?') {
 		l.pop()
+		lit = lit + string(m)
 	}
-	lit := s + string(m)
 	pos := l.pos
 	l.step(len(lit))
 	return TokenItem{CAPTURE, lit, pos}

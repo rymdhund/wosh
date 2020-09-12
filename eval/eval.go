@@ -57,6 +57,27 @@ func (runner *Runner) RunExpr(env *Env, exp ast.Expr) Object {
 		} else {
 			return UnitVal
 		}
+	case *ast.CaptureExpr:
+		switch v.Mod {
+		case "":
+			env.SetCaptureOutput()
+			ret := runner.RunExpr(env, v.Right)
+			env.put(v.Ident.Name, env.PopCaptureOutput())
+			return ret
+		default:
+			panic(fmt.Sprintf("This is a bug! Invalid capture modifier: '%s'", v.Mod))
+		}
+	case *ast.CallExpr:
+		switch v.Ident.Name {
+		case "echo":
+			if len(v.Args) != 1 {
+				panic("Expected 1 argument to echo()")
+			}
+			param := runner.RunExpr(env, v.Args[0])
+			env.OutAdd(param)
+			env.OutPutStr("\n")
+		}
+		return UnitVal
 	default:
 		panic(fmt.Sprintf("Not implemented expression in runner: %+v", exp))
 	}
@@ -80,8 +101,11 @@ func objectFromBasicLit(lit *ast.BasicLit) Object {
 		if err != nil {
 			panic(fmt.Sprintf("Expected int in basic lit: %s", err))
 		}
-		return Object{"int", n}
+		return IntVal(n)
+	case lexer.STRING:
+		s := lit.Value[1 : len(lit.Value)-1]
+		return StrVal(s)
 	default:
-		panic("Not implemented basic lit")
+		panic("Not implemented basic literal")
 	}
 }

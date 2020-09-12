@@ -316,14 +316,28 @@ func (p *Parser) parseCallExpr() (*ast.CallExpr, bool) {
 		return nil, false
 	}
 
-	//...
+	// Parse argument list
+	args := []ast.Expr{}
+
+	// Eols dont matter in argument list
+	p.tokens.beginEolSignificance(false)
+	for true {
+		arg, ok := p.parseMultiExpr()
+		if !ok {
+			break
+		}
+		args = append(args, arg)
+		if !p.tokens.expect(lexer.COMMA) {
+			break
+		}
+	}
+	p.tokens.popEolSignificance()
 
 	if !p.tokens.expect(lexer.RPAREN) {
 		p.tokens.rollback()
 		return nil, false
 	}
 
-	args := []ast.Expr{}
 	p.tokens.commit()
 	return &ast.CallExpr{ident, args}, true
 }
@@ -373,6 +387,10 @@ func (p *Parser) parseIdent() (*ast.Ident, bool) {
 
 func (p *Parser) parseBasicLit() (*ast.BasicLit, bool) {
 	if p.tokens.peekToken() == lexer.INT {
+		item := p.tokens.pop()
+		return &ast.BasicLit{item.Pos, item.Tok, item.Lit}, true
+	}
+	if p.tokens.peekToken() == lexer.STRING {
 		item := p.tokens.pop()
 		return &ast.BasicLit{item.Pos, item.Tok, item.Lit}, true
 	}

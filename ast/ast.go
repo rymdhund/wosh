@@ -113,3 +113,11 @@ type OpExpr struct {
 
 func (t *OpExpr) Pos() lexer.Position { return t.Left.Pos() }
 func (t *OpExpr) exprType()           {}
+
+type CommandExpr struct {
+	CmdParts []string
+	TPos     lexer.Position
+}
+
+func (t *CommandExpr) Pos() lexer.Position { return t.TPos }
+func (t *CommandExpr) exprType()           {}

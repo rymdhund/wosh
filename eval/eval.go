@@ -2,6 +2,8 @@ package eval
 
 import (
 	"fmt"
+	"log"
+	"os/exec"
 	"strconv"
 
 	"github.com/rymdhund/wosh/ast"
@@ -92,6 +94,10 @@ func (runner *Runner) RunExpr(env *Env, exp ast.Expr) Object {
 		default:
 			panic(fmt.Sprintf("Unknown function %s", v.Ident.Name))
 		}
+	case *ast.ParenthExpr:
+		return runner.RunExpr(env, v.Inside)
+	case *ast.CommandExpr:
+		return runner.RunCommandExpr(env, v)
 	default:
 		panic(fmt.Sprintf("Not implemented expression in runner: %+v", exp))
 	}
@@ -106,6 +112,16 @@ func (runner *Runner) RunOpExpr(env *Env, op *ast.OpExpr) Object {
 	default:
 		panic(fmt.Sprintf("Not implement operator '%s'", op.Op))
 	}
+}
+
+func (runner *Runner) RunCommandExpr(env *Env, cmd *ast.CommandExpr) Object {
+	cmdObj := exec.Command(cmd.CmdParts[0], cmd.CmdParts[1:]...)
+	out, err := cmdObj.Output()
+	if err != nil {
+		log.Fatalf("Error running command: %s", err)
+	}
+	env.OutPutStr(string(out))
+	return UnitVal
 }
 
 func objectFromBasicLit(lit *ast.BasicLit) Object {

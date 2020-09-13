@@ -12,27 +12,22 @@ const (
 	IDENT
 	INT
 	STRING
+	COMMAND
 	EOL
 	COMMA
-
 	OP
-
 	PIPE_OP
 	SPACE
-
 	ASSIGN
 	CAPTURE
-
 	LPAREN
 	RPAREN
 	LBRACE
 	RBRACE
 	LBRACKET
 	RBRACKET
-
 	IF
 	ELSE
-
 	COMMENT
 )
 
@@ -42,6 +37,7 @@ var tokens = []string{
 	IDENT:    "IDENT",
 	INT:      "INT",
 	STRING:   "STRING",
+	COMMAND:  "COMMAND",
 	EOL:      "EOL",
 	COMMA:    ",",
 	OP:       "OP",
@@ -190,8 +186,8 @@ func (l *Lexer) LexTokenItem() TokenItem {
 			t := TokenItem{PIPE_OP, "|", l.pos}
 			l.step(1)
 			return t
-		case '\'':
-			return l.lexString()
+		case '\'', '"', '`':
+			return l.lexStringAndCmd()
 		case '#':
 			return l.lexComment()
 		default:
@@ -266,7 +262,7 @@ func isNot(r rune) func(rune) bool {
 	}
 }
 
-func (l *Lexer) lexString() TokenItem {
+func (l *Lexer) lexStringAndCmd() TokenItem {
 	start, ok := l.pop()
 	if !ok {
 		panic("Expected start of string literal")
@@ -280,7 +276,14 @@ func (l *Lexer) lexString() TokenItem {
 
 	pos := l.pos
 	l.step(len(lit))
-	return TokenItem{STRING, lit, pos}
+	switch start {
+	case '\'', '"':
+		return TokenItem{STRING, lit, pos}
+	case '`':
+		return TokenItem{COMMAND, lit, pos}
+	default:
+		panic("Unknown string quote")
+	}
 }
 
 // Identifier is a letter followed by a number of (letter | digit | underscore)

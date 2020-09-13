@@ -264,6 +264,7 @@ func TestParseMiscCombinations(t *testing.T) {
 		string
 	}{
 		{"a <- func(1)"},
+		{"a <- `echo hello`"},
 	}
 	for _, test := range tests {
 		prog := test.string

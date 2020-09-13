@@ -2,6 +2,7 @@ package parser
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/rymdhund/wosh/ast"
 	"github.com/rymdhund/wosh/lexer"
@@ -344,8 +345,8 @@ func (p *Parser) parseSubscrExpr() (*ast.CallExpr, bool) {
 
 // AtomExpr ->
 //   | IfExpr
+//   | BasicLit
 //   | Identifier
-//   | Literal
 //   | Enclosure
 func (p *Parser) parseAtomExpr() (ast.Expr, bool) {
 	iff, ok := p.parseIfExpr()
@@ -375,7 +376,7 @@ func (p *Parser) parseIdent() (*ast.Ident, bool) {
 	return nil, false
 }
 
-func (p *Parser) parseBasicLit() (*ast.BasicLit, bool) {
+func (p *Parser) parseBasicLit() (ast.Expr, bool) {
 	if p.tokens.peekToken() == lexer.INT {
 		item := p.tokens.pop()
 		return &ast.BasicLit{item.Pos, item.Tok, item.Lit}, true
@@ -383,6 +384,12 @@ func (p *Parser) parseBasicLit() (*ast.BasicLit, bool) {
 	if p.tokens.peekToken() == lexer.STRING {
 		item := p.tokens.pop()
 		return &ast.BasicLit{item.Pos, item.Tok, item.Lit}, true
+	}
+	if p.tokens.peekToken() == lexer.COMMAND {
+		item := p.tokens.pop()
+		content := item.Lit[1 : len(item.Lit)-1]
+		parts := strings.Split(content, " ")
+		return &ast.CommandExpr{parts, item.Pos}, true
 	}
 	return nil, false
 }

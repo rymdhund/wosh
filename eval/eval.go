@@ -63,6 +63,11 @@ func (runner *Runner) RunExpr(env *Env, exp ast.Expr) Object {
 			ret := runner.RunExpr(env, v.Right)
 			env.put(v.Ident.Name, env.PopCaptureOutput())
 			return ret
+		case "2":
+			env.SetCaptureErr()
+			ret := runner.RunExpr(env, v.Right)
+			env.put(v.Ident.Name, env.PopCaptureErr())
+			return ret
 		default:
 			panic(fmt.Sprintf("This is a bug! Invalid capture modifier: '%s'", v.Mod))
 		}
@@ -75,6 +80,14 @@ func (runner *Runner) RunExpr(env *Env, exp ast.Expr) Object {
 			param := runner.RunExpr(env, v.Args[0])
 			env.OutAdd(param)
 			env.OutPutStr("\n")
+			return UnitVal
+		case "echo_err":
+			if len(v.Args) != 1 {
+				panic("Expected 1 argument to echo_err()")
+			}
+			param := runner.RunExpr(env, v.Args[0])
+			env.ErrAdd(param)
+			env.ErrPutStr("\n")
 			return UnitVal
 		default:
 			panic(fmt.Sprintf("Unknown function %s", v.Ident.Name))

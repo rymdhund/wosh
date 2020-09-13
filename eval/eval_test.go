@@ -58,6 +58,7 @@ func TestEvalMany(t *testing.T) {
 		{`res = if 1 { 2 } else { 3 }`, IntVal(2)},
 		{`res = if 0 { 2 }`, UnitVal},
 		{"res <- echo('abc')", StrVal("abc\n")},
+		{"res = echo('abc')", UnitVal},
 	}
 	for _, test := range tests {
 		prog, expected := test.string, test.Object

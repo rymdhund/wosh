@@ -121,7 +121,6 @@ func (p *Parser) Parse() (*ast.BlockExpr, error) {
 		panic("Uncommited transactions in parser!")
 	}
 	if len(p.tokens.eolSignificanceStack) != 1 {
-		fmt.Printf("stack: %v\n", p.tokens.eolSignificanceStack)
 		panic("Uncommited eol significance stack!")
 	}
 	if !p.tokens.expect(lexer.EOF) {
@@ -429,7 +428,6 @@ func (p *Parser) parseIfExpr() (ast.Expr, bool) {
 	_, ok = p.tokens.expectGet(lexer.RBRACE)
 	if !ok {
 		// TODO
-		fmt.Printf("error %v\n", p.tokens.peek())
 		panic("not implemented ifexpr '}' error case")
 	}
 

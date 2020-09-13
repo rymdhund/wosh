@@ -31,7 +31,6 @@ func (runner *Runner) RunExpr(env *Env, exp ast.Expr) Object {
 		return ret
 	case *ast.AssignExpr:
 		obj := runner.RunExpr(env, v.Right)
-		fmt.Printf("assigning %s = %v", v.Ident.Name, obj)
 		env.put(v.Ident.Name, obj)
 		return UnitVal
 	case *ast.BasicLit:
@@ -76,8 +75,10 @@ func (runner *Runner) RunExpr(env *Env, exp ast.Expr) Object {
 			param := runner.RunExpr(env, v.Args[0])
 			env.OutAdd(param)
 			env.OutPutStr("\n")
+			return UnitVal
+		default:
+			panic(fmt.Sprintf("Unknown function %s", v.Ident.Name))
 		}
-		return UnitVal
 	default:
 		panic(fmt.Sprintf("Not implemented expression in runner: %+v", exp))
 	}

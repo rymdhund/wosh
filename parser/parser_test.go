@@ -57,6 +57,10 @@ func TestParseFnCall(t *testing.T) {
 	tests := []string{
 		"abc()",
 		"ab_c ()",
+		"f(1)",
+		"f(1, 2)",
+		"f(1, 2, 'hej')",
+		"f(\n1,\n2,\n'hej'\n)",
 	}
 	for _, prog := range tests {
 		p := NewParser(prog)

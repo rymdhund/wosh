@@ -67,16 +67,6 @@ import (
 
 const DEBUG = true
 
-func filterSpace(items []lexer.TokenItem) []lexer.TokenItem {
-	res := []lexer.TokenItem{}
-	for _, item := range items {
-		if item.Tok != lexer.SPACE {
-			res = append(res, item)
-		}
-	}
-	return res
-}
-
 type ParserError struct {
 	msg string
 	pos lexer.Position
@@ -112,7 +102,7 @@ func (p *Parser) showErrors() string {
 func (p *Parser) Parse() (*ast.BlockExpr, error) {
 	l := lexer.NewLexer(p.source)
 	tokens := l.Lex()
-	withoutSpace := filterSpace(tokens)
+	withoutSpace := filterSpaceAndComment(tokens)
 	tr := NewTokenReader(withoutSpace)
 	p.tokens = tr
 
@@ -330,12 +320,13 @@ func (p *Parser) parseCallExpr() (*ast.CallExpr, bool) {
 			break
 		}
 	}
-	p.tokens.popEolSignificance()
 
 	if !p.tokens.expect(lexer.RPAREN) {
+		p.tokens.popEolSignificance()
 		p.tokens.rollback()
 		return nil, false
 	}
+	p.tokens.popEolSignificance()
 
 	p.tokens.commit()
 	return &ast.CallExpr{ident, args}, true

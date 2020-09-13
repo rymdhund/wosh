@@ -116,3 +116,13 @@ func (tr *TokenReader) expectGetOp(opLiteral string) (lexer.TokenItem, bool) {
 		return lexer.TokenItem{}, false
 	}
 }
+
+func filterSpaceAndComment(items []lexer.TokenItem) []lexer.TokenItem {
+	res := []lexer.TokenItem{}
+	for _, item := range items {
+		if item.Tok != lexer.SPACE && item.Tok != lexer.COMMENT {
+			res = append(res, item)
+		}
+	}
+	return res
+}

@@ -32,6 +32,8 @@ const (
 
 	IF
 	ELSE
+
+	COMMENT
 )
 
 var tokens = []string{
@@ -55,6 +57,7 @@ var tokens = []string{
 	CAPTURE:  "CAPTURE",
 	IF:       "IF",
 	ELSE:     "ELSE",
+	COMMENT:  "COMMENT",
 }
 
 func (t Token) String() string {
@@ -189,6 +192,8 @@ func (l *Lexer) LexTokenItem() TokenItem {
 			return t
 		case '\'':
 			return l.lexString()
+		case '#':
+			return l.lexComment()
 		default:
 		}
 
@@ -341,4 +346,11 @@ func (l *Lexer) lexCapture() TokenItem {
 	pos := l.pos
 	l.step(len(lit))
 	return TokenItem{CAPTURE, lit, pos}
+}
+
+func (l *Lexer) lexComment() TokenItem {
+	lit := l.takeWhile(isNot('\n'))
+	pos := l.pos
+	l.step(len(lit))
+	return TokenItem{COMMENT, lit, pos}
 }

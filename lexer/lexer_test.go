@@ -38,6 +38,7 @@ func TestSimpleLex(t *testing.T) {
 		{"<-2", CAPTURE},
 		{"<-*", CAPTURE},
 		{"<-?", CAPTURE},
+		{"# hello", COMMENT},
 	}
 	for _, test := range tests {
 		input, expected := test.string, test.Token

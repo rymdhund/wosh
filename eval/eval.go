@@ -58,7 +58,7 @@ func (runner *Runner) RunExpr(env *Env, exp ast.Expr) Object {
 		}
 	case *ast.CaptureExpr:
 		switch v.Mod {
-		case "":
+		case "", "1":
 			env.SetCaptureOutput()
 			ret := runner.RunExpr(env, v.Right)
 			env.put(v.Ident.Name, env.PopCaptureOutput())

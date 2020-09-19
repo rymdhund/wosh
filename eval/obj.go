@@ -30,6 +30,10 @@ func StrVal(s string) Object {
 	return Object{Type: "str", Value: s}
 }
 
+func ExitVal(n int) Object {
+	return Object{Type: "exit_error", Value: n}
+}
+
 var UnitVal = Object{Type: "()", Value: nil}
 
 func (o *Object) GetString() string {

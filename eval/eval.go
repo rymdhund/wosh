@@ -1,10 +1,12 @@
 package eval
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"os/exec"
 	"strconv"
+	"syscall"
 
 	"github.com/rymdhund/wosh/ast"
 	"github.com/rymdhund/wosh/lexer"
@@ -23,18 +25,25 @@ func (runner *Runner) Run() {
 	runner.RunExpr(runner.baseEnv, runner.ast)
 }
 
-func (runner *Runner) RunExpr(env *Env, exp ast.Expr) Object {
+func (runner *Runner) RunExpr(env *Env, exp ast.Expr) (Object, Object) {
 	switch v := exp.(type) {
 	case *ast.BlockExpr:
 		ret := UnitVal
 		for _, expr := range v.Children {
-			ret = runner.RunExpr(env, expr)
+			var exn Object
+			ret, exn = runner.RunExpr(env, expr)
+			if exn != UnitVal {
+				return UnitVal, exn
+			}
 		}
-		return ret
+		return ret, UnitVal
 	case *ast.AssignExpr:
-		obj := runner.RunExpr(env, v.Right)
+		obj, exn := runner.RunExpr(env, v.Right)
+		if exn != UnitVal {
+			return UnitVal, exn
+		}
 		env.put(v.Ident.Name, obj)
-		return UnitVal
+		return UnitVal, UnitVal
 	case *ast.BasicLit:
 		return objectFromBasicLit(v)
 	case *ast.Ident:
@@ -42,11 +51,14 @@ func (runner *Runner) RunExpr(env *Env, exp ast.Expr) Object {
 		if !ok {
 			panic(fmt.Sprintf("Undefined variable '%s'", v.Name))
 		}
-		return obj
+		return obj, UnitVal
 	case *ast.OpExpr:
 		return runner.RunOpExpr(env, v)
 	case *ast.IfExpr:
-		cond := runner.RunExpr(env, v.Cond)
+		cond, exn := runner.RunExpr(env, v.Cond)
+		if exn != UnitVal {
+			return UnitVal, exn
+		}
 		if cond.Type != "int" {
 			// TODO
 			panic("Not implemented boolean type")
@@ -56,44 +68,37 @@ func (runner *Runner) RunExpr(env *Env, exp ast.Expr) Object {
 		} else if v.Else != nil {
 			return runner.RunExpr(env, v.Else)
 		} else {
-			return UnitVal
+			return UnitVal, UnitVal
 		}
 	case *ast.CaptureExpr:
 		switch v.Mod {
 		case "", "1":
 			env.SetCaptureOutput()
-			ret := runner.RunExpr(env, v.Right)
+			ret, exn := runner.RunExpr(env, v.Right)
+			// Pop output even on exceptions
 			env.put(v.Ident.Name, env.PopCaptureOutput())
-			return ret
+			if exn != UnitVal {
+				return UnitVal, exn
+			}
+			return ret, UnitVal
 		case "2":
 			env.SetCaptureErr()
-			ret := runner.RunExpr(env, v.Right)
+			ret, exn := runner.RunExpr(env, v.Right)
+			// Pop output even on exceptions
 			env.put(v.Ident.Name, env.PopCaptureErr())
-			return ret
+			if exn != UnitVal {
+				return UnitVal, exn
+			}
+			return ret, UnitVal
+		case "?":
+			ret, exn := runner.RunExpr(env, v.Right)
+			env.put(v.Ident.Name, exn)
+			return ret, UnitVal
 		default:
 			panic(fmt.Sprintf("This is a bug! Invalid capture modifier: '%s'", v.Mod))
 		}
 	case *ast.CallExpr:
-		switch v.Ident.Name {
-		case "echo":
-			if len(v.Args) != 1 {
-				panic("Expected 1 argument to echo()")
-			}
-			param := runner.RunExpr(env, v.Args[0])
-			env.OutAdd(param)
-			env.OutPutStr("\n")
-			return UnitVal
-		case "echo_err":
-			if len(v.Args) != 1 {
-				panic("Expected 1 argument to echo_err()")
-			}
-			param := runner.RunExpr(env, v.Args[0])
-			env.ErrAdd(param)
-			env.ErrPutStr("\n")
-			return UnitVal
-		default:
-			panic(fmt.Sprintf("Unknown function %s", v.Ident.Name))
-		}
+		return runner.RunCallExpr(env, v)
 	case *ast.ParenthExpr:
 		return runner.RunExpr(env, v.Inside)
 	case *ast.CommandExpr:
@@ -103,38 +108,99 @@ func (runner *Runner) RunExpr(env *Env, exp ast.Expr) Object {
 	}
 }
 
-func (runner *Runner) RunOpExpr(env *Env, op *ast.OpExpr) Object {
+func (runner *Runner) RunOpExpr(env *Env, op *ast.OpExpr) (Object, Object) {
 	switch op.Op {
 	case "+":
-		o1 := runner.RunExpr(env, op.Left)
-		o2 := runner.RunExpr(env, op.Right)
-		return o1.add(o2)
+		o1, exn := runner.RunExpr(env, op.Left)
+		if exn != UnitVal {
+			return UnitVal, exn
+		}
+		o2, exn := runner.RunExpr(env, op.Right)
+		if exn != UnitVal {
+			return UnitVal, exn
+		}
+		return o1.add(o2), UnitVal
 	default:
 		panic(fmt.Sprintf("Not implement operator '%s'", op.Op))
 	}
 }
 
-func (runner *Runner) RunCommandExpr(env *Env, cmd *ast.CommandExpr) Object {
+func (runner *Runner) RunCommandExpr(env *Env, cmd *ast.CommandExpr) (Object, Object) {
 	cmdObj := exec.Command(cmd.CmdParts[0], cmd.CmdParts[1:]...)
-	out, err := cmdObj.Output()
+
+	var stdout, stderr bytes.Buffer
+	cmdObj.Stdout = &stdout
+	cmdObj.Stderr = &stderr
+	err := cmdObj.Run()
+
+	outStr, errStr := string(stdout.Bytes()), string(stderr.Bytes())
+
+	env.OutPutStr(string(outStr))
+	env.ErrPutStr(string(errStr))
+
 	if err != nil {
+		if exiterr, ok := err.(*exec.ExitError); ok {
+			// The program has exited with an exit code != 0
+			if status, ok := exiterr.Sys().(syscall.WaitStatus); ok {
+				return UnitVal, ExitVal(status.ExitStatus())
+			}
+		}
 		log.Fatalf("Error running command: %s", err)
 	}
-	env.OutPutStr(string(out))
-	return UnitVal
+
+	return UnitVal, UnitVal
 }
 
-func objectFromBasicLit(lit *ast.BasicLit) Object {
+func (runner *Runner) RunCallExpr(env *Env, call *ast.CallExpr) (Object, Object) {
+	switch call.Ident.Name {
+	case "echo":
+		if len(call.Args) != 1 {
+			panic("Expected 1 argument to echo()")
+		}
+		param, exn := runner.RunExpr(env, call.Args[0])
+		if exn != UnitVal {
+			return UnitVal, exn
+		}
+		env.OutAdd(param)
+		env.OutPutStr("\n")
+		return UnitVal, UnitVal
+	case "echo_err":
+		if len(call.Args) != 1 {
+			panic("Expected 1 argument to echo_err()")
+		}
+		param, exn := runner.RunExpr(env, call.Args[0])
+		if exn != UnitVal {
+			return UnitVal, exn
+		}
+		env.ErrAdd(param)
+		env.ErrPutStr("\n")
+		return UnitVal, UnitVal
+	case "raise":
+		if len(call.Args) != 1 {
+			panic("Expected 1 argument to raise()")
+		}
+		param, exn := runner.RunExpr(env, call.Args[0])
+		// If the argument evaluation raises, we cant raise
+		if exn != UnitVal {
+			return UnitVal, exn
+		}
+		return UnitVal, param
+	default:
+		panic(fmt.Sprintf("Unknown function %s", call.Ident.Name))
+	}
+}
+
+func objectFromBasicLit(lit *ast.BasicLit) (Object, Object) {
 	switch lit.Kind {
 	case lexer.INT:
 		n, err := strconv.Atoi(lit.Value)
 		if err != nil {
 			panic(fmt.Sprintf("Expected int in basic lit: %s", err))
 		}
-		return IntVal(n)
+		return IntVal(n), UnitVal
 	case lexer.STRING:
 		s := lit.Value[1 : len(lit.Value)-1]
-		return StrVal(s)
+		return StrVal(s), UnitVal
 	default:
 		panic("Not implemented basic literal")
 	}

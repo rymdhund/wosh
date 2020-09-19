@@ -59,9 +59,14 @@ func TestEvalMany(t *testing.T) {
 		{`res = if 1 { 2 } else { 3 }`, IntVal(2)},
 		{`res = if 0 { 2 }`, UnitVal},
 		{"res <- echo('abc')", StrVal("abc\n")},
+		{"res <-2 echo_err('abc')", StrVal("abc\n")},
+		{"res <-? raise(1)", IntVal(1)},
 		{"res = echo('abc')", UnitVal},
 		{"a = 1 # test\n# comment\nb=a #comment\nres=b#comment", IntVal(1)},
 		{"res <- `echo abc`", StrVal("abc\n")},
+		{"res <-2 `../utils/echo_err.sh eee`", StrVal("eee\n")},
+		{"res <-? `diff`", ExitVal(2)},
+		{"res <-? if 1 { raise(2) }", IntVal(2)},
 	}
 	for _, test := range tests {
 		prog, expected := test.string, test.Object

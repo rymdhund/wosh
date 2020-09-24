@@ -28,7 +28,7 @@ func (runner *Runner) Run() {
 func (runner *Runner) RunExpr(env *Env, exp ast.Expr) (Object, Object) {
 	switch v := exp.(type) {
 	case *ast.BlockExpr:
-		ret := UnitVal
+		var ret Object = UnitVal
 		for _, expr := range v.Children {
 			var exn Object
 			ret, exn = runner.RunExpr(env, expr)
@@ -47,11 +47,7 @@ func (runner *Runner) RunExpr(env *Env, exp ast.Expr) (Object, Object) {
 	case *ast.BasicLit:
 		return objectFromBasicLit(v)
 	case *ast.Ident:
-		obj, ok := env.get(v.Name)
-		if !ok {
-			panic(fmt.Sprintf("Undefined variable '%s'", v.Name))
-		}
-		return obj, UnitVal
+		return runner.RunIdentExpr(env, v)
 	case *ast.OpExpr:
 		return runner.RunOpExpr(env, v)
 	case *ast.IfExpr:
@@ -59,11 +55,7 @@ func (runner *Runner) RunExpr(env *Env, exp ast.Expr) (Object, Object) {
 		if exn != UnitVal {
 			return UnitVal, exn
 		}
-		if cond.Type != "int" {
-			// TODO
-			panic("Not implemented boolean type")
-		}
-		if cond.Value != 0 {
+		if GetBool(cond) {
 			return runner.RunExpr(env, v.Then)
 		} else if v.Else != nil {
 			return runner.RunExpr(env, v.Else)
@@ -103,6 +95,9 @@ func (runner *Runner) RunExpr(env *Env, exp ast.Expr) (Object, Object) {
 		return runner.RunExpr(env, v.Inside)
 	case *ast.CommandExpr:
 		return runner.RunCommandExpr(env, v)
+	case *ast.FuncExpr:
+		fnObj := FunctionObject{v}
+		return &fnObj, UnitVal
 	default:
 		panic(fmt.Sprintf("Not implemented expression in runner: %+v", exp))
 	}
@@ -119,7 +114,7 @@ func (runner *Runner) RunOpExpr(env *Env, op *ast.OpExpr) (Object, Object) {
 		if exn != UnitVal {
 			return UnitVal, exn
 		}
-		return o1.add(o2), UnitVal
+		return add(o1, o2), UnitVal
 	default:
 		panic(fmt.Sprintf("Not implement operator '%s'", op.Op))
 	}
@@ -186,8 +181,44 @@ func (runner *Runner) RunCallExpr(env *Env, call *ast.CallExpr) (Object, Object)
 		}
 		return UnitVal, param
 	default:
-		panic(fmt.Sprintf("Unknown function %s", call.Ident.Name))
+		obj, exc := runner.RunIdentExpr(env, call.Ident)
+		if exc != UnitVal {
+			return UnitVal, exc
+		}
+		f, ok := obj.(*FunctionObject)
+		if !ok {
+			panic("cannot call non-function")
+		}
+
+		innerEnv := NewInnerEnv(env)
+
+		if len(f.Expr.Args) != len(call.Args) {
+			log.Panicf(
+				"Function '%s' expected %d args, got %d",
+				call.Ident.Name,
+				len(f.Expr.Args),
+				len(call.Args),
+			)
+		}
+
+		for i, arg := range call.Args {
+			param, exc := runner.RunExpr(env, arg)
+			if exc != UnitVal {
+				return UnitVal, exc
+			}
+			innerEnv.put(f.Expr.Args[i], param)
+		}
+		res, exc := runner.RunExpr(innerEnv, f.Expr.Body)
+		return res, exc
 	}
+}
+
+func (runner *Runner) RunIdentExpr(env *Env, ident *ast.Ident) (Object, Object) {
+	obj, ok := env.get(ident.Name)
+	if !ok {
+		panic(fmt.Sprintf("Undefined variable '%s'", ident.Name))
+	}
+	return obj, UnitVal
 }
 
 func objectFromBasicLit(lit *ast.BasicLit) (Object, Object) {

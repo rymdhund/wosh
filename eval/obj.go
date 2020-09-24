@@ -1,44 +1,103 @@
 package eval
 
-import "fmt"
+import (
+	"fmt"
+	"reflect"
+)
 
-// This will probably be an interface
-type Object struct {
-	Type  string
-	Value interface{}
+type Object interface {
+	Type() string
 }
 
-func (o Object) String() string {
-	return fmt.Sprintf("%s(%v)", o.Type, o.Value)
+func Equal(o1, o2 Object) bool {
+	return reflect.DeepEqual(o1, o2)
 }
 
-func (o Object) add(o2 Object) Object {
-	if o.Type != "int" {
+type StringObject struct {
+	val string
+}
+
+func (t *StringObject) Type() string {
+	return "str"
+}
+
+func (t *StringObject) String() string {
+	return fmt.Sprintf("%s(%v)", t.Type(), t.val)
+}
+
+type IntObject struct {
+	val int
+}
+
+func (t *IntObject) Type() string {
+	return "int"
+}
+
+func (t *IntObject) String() string {
+	return fmt.Sprintf("%s(%v)", t.Type(), t.val)
+}
+
+type ExitObject struct {
+	val int
+}
+
+func (t *ExitObject) Type() string {
+	return "exit"
+}
+
+func (t *ExitObject) String() string {
+	return fmt.Sprintf("%s(%v)", t.Type(), t.val)
+}
+
+type UnitObject struct {
+}
+
+func (t *UnitObject) Type() string {
+	return "()"
+}
+
+func (t *UnitObject) String() string {
+	return "()"
+}
+
+func add(o1, o2 Object) Object {
+	i1, ok := o1.(*IntObject)
+	if !ok {
 		panic("trying to add non-integer")
 	}
-	if o2.Type != "int" {
+	i2, ok := o2.(*IntObject)
+	if !ok {
 		panic("trying to add non-integer")
 	}
-	return Object{"int", o.Value.(int) + o2.Value.(int)}
+	return IntVal(i1.val + i2.val)
 }
 
-func IntVal(n int) Object {
-	return Object{Type: "int", Value: n}
+func IntVal(n int) *IntObject {
+	return &IntObject{val: n}
 }
 
-func StrVal(s string) Object {
-	return Object{Type: "str", Value: s}
+func StrVal(s string) *StringObject {
+	return &StringObject{val: s}
 }
 
-func ExitVal(n int) Object {
-	return Object{Type: "exit_error", Value: n}
+func ExitVal(n int) *ExitObject {
+	return &ExitObject{val: n}
 }
 
-var UnitVal = Object{Type: "()", Value: nil}
+var UnitVal = &UnitObject{}
 
-func (o *Object) GetString() string {
-	if o.Type != "str" {
-		panic(fmt.Sprintf("Tryingt o use value of type '%s' as string", o.Type))
+func GetString(o Object) string {
+	s, ok := o.(*StringObject)
+	if !ok {
+		panic(fmt.Sprintf("Trying to use value of type '%s' as string", o.Type()))
 	}
-	return o.Value.(string)
+	return s.val
+}
+
+func GetBool(o Object) bool {
+	n, ok := o.(*IntObject)
+	if !ok {
+		panic(fmt.Sprintf("Trying to use value of type '%s' as bool", o.Type()))
+	}
+	return n.val != 0
 }

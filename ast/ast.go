@@ -121,3 +121,12 @@ type CommandExpr struct {
 
 func (t *CommandExpr) Pos() lexer.Position { return t.TPos }
 func (t *CommandExpr) exprType()           {}
+
+type FuncExpr struct {
+	Args []string
+	Body *BlockExpr
+	TPos lexer.Position
+}
+
+func (t *FuncExpr) Pos() lexer.Position { return t.TPos }
+func (t *FuncExpr) exprType()           {}

@@ -353,6 +353,10 @@ func (p *Parser) parseAtomExpr() (ast.Expr, bool) {
 	if ok {
 		return iff, true
 	}
+	fn, ok := p.parseFnDefExpr()
+	if ok {
+		return fn, true
+	}
 	lit, ok := p.parseBasicLit()
 	if ok {
 		return lit, true
@@ -462,6 +466,60 @@ func (p *Parser) parseIfExpr() (ast.Expr, bool) {
 	p.tokens.popEolSignificance()
 	p.tokens.commit()
 	return &ast.IfExpr{cond, then, elsee, iff.Pos}, true
+}
+
+func (p *Parser) parseFnDefExpr() (ast.Expr, bool) {
+	p.tokens.begin()
+
+	fn, ok := p.tokens.expectGet(lexer.FN)
+	if !ok {
+		p.tokens.rollback()
+		return nil, false
+	}
+
+	ident, ok := p.parseIdent()
+	if !ok {
+		// TODO
+		panic("ParseFnDef: Not implemented ident error error case")
+	}
+
+	if !p.tokens.expect(lexer.LPAREN) {
+		// TODO
+		panic("ParseFnDef: Not implemented")
+	}
+
+	params := []string{}
+	for true {
+		param, ok := p.parseIdent()
+		params = append(params, param.Name)
+		if !ok {
+			break
+		}
+		if !p.tokens.expect(lexer.COMMA) {
+			break
+		}
+	}
+
+	if !p.tokens.expect(lexer.RPAREN) {
+		// TODO
+		panic("ParseFnDef: Not implemented")
+	}
+
+	if !p.tokens.expect(lexer.LBRACE) {
+		// TODO
+		panic("ParseFnDef: Not implemented")
+	}
+
+	body, ok := p.parseBlockExpr()
+
+	if !p.tokens.expect(lexer.RBRACE) {
+		// TODO
+		panic("ParseFnDef: Not implemented")
+	}
+	p.tokens.commit()
+
+	funcExpr := &ast.FuncExpr{params, body, fn.Pos}
+	return &ast.AssignExpr{ident, funcExpr}, true
 }
 
 func (p *Parser) parseParenthExpr() (ast.Expr, bool) {

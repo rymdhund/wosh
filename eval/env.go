@@ -6,6 +6,7 @@ import (
 )
 
 type Env struct {
+	outer       *Env
 	vars        map[string]Object
 	outCaptures []string
 	errCaptures []string
@@ -13,6 +14,16 @@ type Env struct {
 
 func NewEnv() *Env {
 	return &Env{
+		nil,
+		map[string]Object{},
+		[]string{},
+		[]string{},
+	}
+}
+
+func NewInnerEnv(env *Env) *Env {
+	return &Env{
+		env,
 		map[string]Object{},
 		[]string{},
 		[]string{},
@@ -41,13 +52,15 @@ func (env *Env) PopCaptureOutput() Object {
 func (env *Env) OutPutStr(s string) {
 	if len(env.outCaptures) > 0 {
 		env.outCaptures[len(env.outCaptures)-1] += s
+	} else if env.outer != nil {
+		env.outer.OutPutStr(s)
 	} else {
 		fmt.Print(s)
 	}
 }
 
 func (env *Env) OutAdd(o Object) {
-	s := o.GetString()
+	s := GetString(o)
 	env.OutPutStr(s)
 }
 
@@ -64,12 +77,14 @@ func (env *Env) PopCaptureErr() Object {
 func (env *Env) ErrPutStr(s string) {
 	if len(env.errCaptures) > 0 {
 		env.errCaptures[len(env.errCaptures)-1] += s
+	} else if env.outer != nil {
+		env.outer.ErrPutStr(s)
 	} else {
 		fmt.Fprint(os.Stderr, s)
 	}
 }
 
 func (env *Env) ErrAdd(o Object) {
-	s := o.GetString()
+	s := GetString(o)
 	env.ErrPutStr(s)
 }

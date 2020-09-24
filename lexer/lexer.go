@@ -28,6 +28,7 @@ const (
 	RBRACKET
 	IF
 	ELSE
+	FN
 	COMMENT
 )
 
@@ -53,6 +54,7 @@ var tokens = []string{
 	CAPTURE:  "CAPTURE",
 	IF:       "IF",
 	ELSE:     "ELSE",
+	FN:       "FN",
 	COMMENT:  "COMMENT",
 }
 
@@ -110,8 +112,15 @@ func (l *Lexer) popn(n int) (string, bool) {
 	return s, true
 }
 
+func min(x, y int) int {
+	if x < y {
+		return x
+	}
+	return y
+}
+
 func (l *Lexer) peekn(n int) string {
-	return string(l.input[l.idx : l.idx+n])
+	return string(l.input[l.idx:min(l.idx+n, len(l.input))])
 }
 
 func (l *Lexer) Lex() []TokenItem {
@@ -305,6 +314,8 @@ func (l *Lexer) lexIdentOrKw() TokenItem {
 		return TokenItem{IF, lit, pos}
 	case "else":
 		return TokenItem{ELSE, lit, pos}
+	case "fn":
+		return TokenItem{FN, lit, pos}
 	default:
 		return TokenItem{IDENT, lit, pos}
 	}

@@ -59,11 +59,6 @@ func (env *Env) OutPutStr(s string) {
 	}
 }
 
-func (env *Env) OutAdd(o Object) {
-	s := GetString(o)
-	env.OutPutStr(s)
-}
-
 func (env *Env) SetCaptureErr() {
 	env.errCaptures = append(env.errCaptures, "")
 }
@@ -82,9 +77,4 @@ func (env *Env) ErrPutStr(s string) {
 	} else {
 		fmt.Fprint(os.Stderr, s)
 	}
-}
-
-func (env *Env) ErrAdd(o Object) {
-	s := GetString(o)
-	env.ErrPutStr(s)
 }

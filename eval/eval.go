@@ -6,6 +6,7 @@ import (
 	"log"
 	"os/exec"
 	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/rymdhund/wosh/ast"
@@ -21,29 +22,34 @@ func NewRunner(ast *ast.BlockExpr) *Runner {
 	return &Runner{NewEnv(), ast}
 }
 
-func (runner *Runner) Run() {
-	runner.RunExpr(runner.baseEnv, runner.ast)
+func (runner *Runner) Run() error {
+	_, exn := runner.RunExpr(runner.baseEnv, runner.ast)
+	if exn != NoExnVal {
+		return fmt.Errorf("Execution stopped because of unhandled exception:\nStackTrace:\n%s\n%s\n", exn.GetStackTrace(), exn.Msg())
+	}
+	return nil
 }
 
-func (runner *Runner) RunExpr(env *Env, exp ast.Expr) (Object, Object) {
+// RunExpr returns a pair containing either a value for the evaluated expression or an exception value
+func (runner *Runner) RunExpr(env *Env, exp ast.Expr) (Object, Exception) {
 	switch v := exp.(type) {
 	case *ast.BlockExpr:
 		var ret Object = UnitVal
 		for _, expr := range v.Children {
-			var exn Object
+			var exn Exception
 			ret, exn = runner.RunExpr(env, expr)
-			if exn != UnitVal {
+			if exn != NoExnVal {
 				return UnitVal, exn
 			}
 		}
-		return ret, UnitVal
+		return ret, NoExnVal
 	case *ast.AssignExpr:
 		obj, exn := runner.RunExpr(env, v.Right)
-		if exn != UnitVal {
+		if exn != NoExnVal {
 			return UnitVal, exn
 		}
 		env.put(v.Ident.Name, obj)
-		return UnitVal, UnitVal
+		return UnitVal, NoExnVal
 	case *ast.BasicLit:
 		return objectFromBasicLit(v)
 	case *ast.Ident:
@@ -52,7 +58,7 @@ func (runner *Runner) RunExpr(env *Env, exp ast.Expr) (Object, Object) {
 		return runner.RunOpExpr(env, v)
 	case *ast.IfExpr:
 		cond, exn := runner.RunExpr(env, v.Cond)
-		if exn != UnitVal {
+		if exn != NoExnVal {
 			return UnitVal, exn
 		}
 		if GetBool(cond) {
@@ -60,7 +66,7 @@ func (runner *Runner) RunExpr(env *Env, exp ast.Expr) (Object, Object) {
 		} else if v.Else != nil {
 			return runner.RunExpr(env, v.Else)
 		} else {
-			return UnitVal, UnitVal
+			return UnitVal, NoExnVal
 		}
 	case *ast.CaptureExpr:
 		switch v.Mod {
@@ -69,23 +75,23 @@ func (runner *Runner) RunExpr(env *Env, exp ast.Expr) (Object, Object) {
 			ret, exn := runner.RunExpr(env, v.Right)
 			// Pop output even on exceptions
 			env.put(v.Ident.Name, env.PopCaptureOutput())
-			if exn != UnitVal {
+			if exn != NoExnVal {
 				return UnitVal, exn
 			}
-			return ret, UnitVal
+			return ret, NoExnVal
 		case "2":
 			env.SetCaptureErr()
 			ret, exn := runner.RunExpr(env, v.Right)
 			// Pop output even on exceptions
 			env.put(v.Ident.Name, env.PopCaptureErr())
-			if exn != UnitVal {
+			if exn != NoExnVal {
 				return UnitVal, exn
 			}
-			return ret, UnitVal
+			return ret, NoExnVal
 		case "?":
 			ret, exn := runner.RunExpr(env, v.Right)
 			env.put(v.Ident.Name, exn)
-			return ret, UnitVal
+			return ret, NoExnVal
 		default:
 			panic(fmt.Sprintf("This is a bug! Invalid capture modifier: '%s'", v.Mod))
 		}
@@ -97,30 +103,30 @@ func (runner *Runner) RunExpr(env *Env, exp ast.Expr) (Object, Object) {
 		return runner.RunCommandExpr(env, v)
 	case *ast.FuncExpr:
 		fnObj := FunctionObject{v}
-		return &fnObj, UnitVal
+		return &fnObj, NoExnVal
 	default:
 		panic(fmt.Sprintf("Not implemented expression in runner: %+v", exp))
 	}
 }
 
-func (runner *Runner) RunOpExpr(env *Env, op *ast.OpExpr) (Object, Object) {
+func (runner *Runner) RunOpExpr(env *Env, op *ast.OpExpr) (Object, Exception) {
 	switch op.Op {
 	case "+":
 		o1, exn := runner.RunExpr(env, op.Left)
-		if exn != UnitVal {
+		if exn != NoExnVal {
 			return UnitVal, exn
 		}
 		o2, exn := runner.RunExpr(env, op.Right)
-		if exn != UnitVal {
+		if exn != NoExnVal {
 			return UnitVal, exn
 		}
-		return add(o1, o2), UnitVal
+		return add(o1, o2), NoExnVal
 	default:
 		panic(fmt.Sprintf("Not implement operator '%s'", op.Op))
 	}
 }
 
-func (runner *Runner) RunCommandExpr(env *Env, cmd *ast.CommandExpr) (Object, Object) {
+func (runner *Runner) RunCommandExpr(env *Env, cmd *ast.CommandExpr) (Object, Exception) {
 	cmdObj := exec.Command(cmd.CmdParts[0], cmd.CmdParts[1:]...)
 
 	var stdout, stderr bytes.Buffer
@@ -137,53 +143,65 @@ func (runner *Runner) RunCommandExpr(env *Env, cmd *ast.CommandExpr) (Object, Ob
 		if exiterr, ok := err.(*exec.ExitError); ok {
 			// The program has exited with an exit code != 0
 			if status, ok := exiterr.Sys().(syscall.WaitStatus); ok {
-				return UnitVal, ExitVal(status.ExitStatus())
+				return UnitVal, ExitVal(status.ExitStatus(), strings.Join(cmd.CmdParts, " "), cmd.Pos().Line)
 			}
 		}
 		log.Fatalf("Error running command: %s", err)
 	}
 
-	return UnitVal, UnitVal
+	return UnitVal, NoExnVal
 }
 
-func (runner *Runner) RunCallExpr(env *Env, call *ast.CallExpr) (Object, Object) {
+func (runner *Runner) RunCallExpr(env *Env, call *ast.CallExpr) (Object, Exception) {
 	switch call.Ident.Name {
 	case "echo":
 		if len(call.Args) != 1 {
 			panic("Expected 1 argument to echo()")
 		}
 		param, exn := runner.RunExpr(env, call.Args[0])
-		if exn != UnitVal {
+		if exn != NoExnVal {
 			return UnitVal, exn
 		}
-		env.OutAdd(param)
+		s, err := GetString(param)
+		if err != nil {
+			return UnitVal, ExnVal(err.Error(), call.Ident.Name, call.Pos().Line)
+		}
+		env.OutPutStr(s)
 		env.OutPutStr("\n")
-		return UnitVal, UnitVal
+		return UnitVal, NoExnVal
 	case "echo_err":
 		if len(call.Args) != 1 {
 			panic("Expected 1 argument to echo_err()")
 		}
 		param, exn := runner.RunExpr(env, call.Args[0])
-		if exn != UnitVal {
+		if exn != NoExnVal {
 			return UnitVal, exn
 		}
-		env.ErrAdd(param)
+		s, err := GetString(param)
+		if err != nil {
+			return UnitVal, ExnVal(err.Error(), call.Ident.Name, call.Pos().Line)
+		}
+		env.ErrPutStr(s)
 		env.ErrPutStr("\n")
-		return UnitVal, UnitVal
+		return UnitVal, NoExnVal
 	case "raise":
 		if len(call.Args) != 1 {
 			panic("Expected 1 argument to raise()")
 		}
 		param, exn := runner.RunExpr(env, call.Args[0])
 		// If the argument evaluation raises, we cant raise
-		if exn != UnitVal {
+		if exn != NoExnVal {
 			return UnitVal, exn
 		}
-		return UnitVal, param
+		s, err := GetString(param)
+		if err != nil {
+			return UnitVal, ExnVal(err.Error(), call.Ident.Name, call.Pos().Line)
+		}
+		return UnitVal, ExnVal(s, "raise", call.Pos().Line)
 	default:
-		obj, exc := runner.RunIdentExpr(env, call.Ident)
-		if exc != UnitVal {
-			return UnitVal, exc
+		obj, exn := runner.RunIdentExpr(env, call.Ident)
+		if exn != NoExnVal {
+			return UnitVal, exn
 		}
 		f, ok := obj.(*FunctionObject)
 		if !ok {
@@ -202,36 +220,39 @@ func (runner *Runner) RunCallExpr(env *Env, call *ast.CallExpr) (Object, Object)
 		}
 
 		for i, arg := range call.Args {
-			param, exc := runner.RunExpr(env, arg)
-			if exc != UnitVal {
-				return UnitVal, exc
+			param, exn := runner.RunExpr(env, arg)
+			if exn != NoExnVal {
+				return UnitVal, exn
 			}
 			innerEnv.put(f.Expr.Args[i], param)
 		}
-		res, exc := runner.RunExpr(innerEnv, f.Expr.Body)
-		return res, exc
+		res, exn := runner.RunExpr(innerEnv, f.Expr.Body)
+		if exn != NoExnVal {
+			exn.AddStackEntry(StackEntry{call.Ident.Name, call.Pos().Line})
+		}
+		return res, exn
 	}
 }
 
-func (runner *Runner) RunIdentExpr(env *Env, ident *ast.Ident) (Object, Object) {
+func (runner *Runner) RunIdentExpr(env *Env, ident *ast.Ident) (Object, Exception) {
 	obj, ok := env.get(ident.Name)
 	if !ok {
 		panic(fmt.Sprintf("Undefined variable '%s'", ident.Name))
 	}
-	return obj, UnitVal
+	return obj, NoExnVal
 }
 
-func objectFromBasicLit(lit *ast.BasicLit) (Object, Object) {
+func objectFromBasicLit(lit *ast.BasicLit) (Object, Exception) {
 	switch lit.Kind {
 	case lexer.INT:
 		n, err := strconv.Atoi(lit.Value)
 		if err != nil {
 			panic(fmt.Sprintf("Expected int in basic lit: %s", err))
 		}
-		return IntVal(n), UnitVal
+		return IntVal(n), NoExnVal
 	case lexer.STRING:
 		s := lit.Value[1 : len(lit.Value)-1]
-		return StrVal(s), UnitVal
+		return StrVal(s), NoExnVal
 	default:
 		panic("Not implemented basic literal")
 	}

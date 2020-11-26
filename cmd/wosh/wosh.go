@@ -27,5 +27,10 @@ func main() {
 		os.Exit(1)
 	}
 	r := eval.NewRunner(ast)
-	r.Run()
+
+	err = r.Run()
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
 }

@@ -5,8 +5,21 @@ import (
 	"reflect"
 )
 
+// An entry in a stack trace
+type StackEntry struct {
+	Function string
+	Line     int
+}
+
 type Object interface {
 	Type() string
+}
+
+type Exception interface {
+	Object
+	Msg() string
+	AddStackEntry(StackEntry)
+	GetStackTrace() string
 }
 
 func Equal(o1, o2 Object) bool {
@@ -37,16 +50,46 @@ func (t *IntObject) String() string {
 	return fmt.Sprintf("%s(%v)", t.Type(), t.val)
 }
 
+type ExnObject struct {
+	val   string
+	stack []StackEntry
+}
+
+func (t *ExnObject) Type() string {
+	return "exception"
+}
+
+func (t *ExnObject) String() string {
+	return fmt.Sprintf("%s(%v)", t.Type(), t.val)
+}
+
+func (t *ExnObject) Msg() string {
+	return t.val
+}
+
+func (t *ExnObject) AddStackEntry(entry StackEntry) {
+	t.stack = append(t.stack, entry)
+}
+
+func (t *ExnObject) GetStackTrace() string {
+	res := ""
+	for i := len(t.stack) - 1; i >= 0; i-- {
+		e := t.stack[i]
+		res += fmt.Sprintf("  unknown:%d - %s", e.Line, e.Function)
+		if i > 0 {
+			res += "\n"
+		}
+	}
+	return res
+}
+
 type ExitObject struct {
-	val int
+	ExnObject
+	ExitCode int
 }
 
 func (t *ExitObject) Type() string {
 	return "exit"
-}
-
-func (t *ExitObject) String() string {
-	return fmt.Sprintf("%s(%v)", t.Type(), t.val)
 }
 
 type UnitObject struct {
@@ -80,18 +123,29 @@ func StrVal(s string) *StringObject {
 	return &StringObject{val: s}
 }
 
-func ExitVal(n int) *ExitObject {
-	return &ExitObject{val: n}
+func ExitVal(n int, cause string, line int) *ExitObject {
+
+	return &ExitObject{
+		*ExnVal(fmt.Sprintf("Nonzero exit: %d", n), cause, line),
+		n,
+	}
 }
 
 var UnitVal = &UnitObject{}
 
-func GetString(o Object) string {
+func ExnVal(s string, cause string, line int) *ExnObject {
+	entry := StackEntry{cause, line}
+	return &ExnObject{val: s, stack: []StackEntry{entry}}
+}
+
+var NoExnVal = &ExnObject{}
+
+func GetString(o Object) (string, error) {
 	s, ok := o.(*StringObject)
 	if !ok {
-		panic(fmt.Sprintf("Trying to use value of type '%s' as string", o.Type()))
+		return "", fmt.Errorf("Trying to use value of type '%s' as string", o.Type())
 	}
-	return s.val
+	return s.val, nil
 }
 
 func GetBool(o Object) bool {

@@ -56,13 +56,10 @@ func TestEvalMany(t *testing.T) {
 		{`res = if 0 { 2 }`, UnitVal},
 		{"res <- echo('abc')", StrVal("abc\n")},
 		{"res <-2 echo_err('abc')", StrVal("abc\n")},
-		{"res <-? raise(1)", IntVal(1)},
 		{"res = echo('abc')", UnitVal},
 		{"a = 1 # test\n# comment\nb=a #comment\nres=b#comment", IntVal(1)},
 		{"res <- `echo abc`", StrVal("abc\n")},
 		{"res <-2 `../utils/echo_err.sh eee`", StrVal("eee\n")},
-		{"res <-? `diff`", ExitVal(2)},
-		{"res <-? if 1 { raise(2) }", IntVal(2)},
 	}
 	for _, test := range tests {
 		prog, expected := test.string, test.Object
@@ -71,6 +68,26 @@ func TestEvalMany(t *testing.T) {
 		res, _ := r.baseEnv.get("res")
 		if !Equal(res, expected) {
 			t.Errorf("Got %s, expected %s", res, expected)
+		}
+	}
+}
+
+func TestEvalError(t *testing.T) {
+	tests := []struct {
+		prog string
+		exp  string
+	}{
+		{"res <-? raise('test')", "exception"},
+		{"res <-? `diff`", "exit"},
+		{"res <-? if 1 { raise(2) }", "exception"},
+	}
+	for _, test := range tests {
+		prog, expected := test.prog, test.exp
+		r := runner(t, prog)
+		r.Run()
+		res, _ := r.baseEnv.get("res")
+		if res.Type() != expected {
+			t.Errorf("Got %s, expected %s", res.Type(), expected)
 		}
 	}
 }

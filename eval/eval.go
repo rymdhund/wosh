@@ -68,6 +68,22 @@ func (runner *Runner) RunExpr(env *Env, exp ast.Expr) (Object, Exception) {
 		} else {
 			return UnitVal, NoExnVal
 		}
+	case *ast.ForExpr:
+		for true {
+			cond, exn := runner.RunExpr(env, v.Cond)
+			if exn != NoExnVal {
+				return UnitVal, exn
+			}
+			if GetBool(cond) {
+				_, exn = runner.RunExpr(env, v.Then)
+				if exn != NoExnVal {
+					return UnitVal, exn
+				}
+			} else {
+				break
+			}
+		}
+		return UnitVal, NoExnVal
 	case *ast.CaptureExpr:
 		switch v.Mod {
 		case "", "1":
@@ -110,17 +126,23 @@ func (runner *Runner) RunExpr(env *Env, exp ast.Expr) (Object, Exception) {
 }
 
 func (runner *Runner) RunOpExpr(env *Env, op *ast.OpExpr) (Object, Exception) {
+	o1, exn := runner.RunExpr(env, op.Left)
+	if exn != NoExnVal {
+		return UnitVal, exn
+	}
+	o2, exn := runner.RunExpr(env, op.Right)
+	if exn != NoExnVal {
+		return UnitVal, exn
+	}
 	switch op.Op {
 	case "+":
-		o1, exn := runner.RunExpr(env, op.Left)
-		if exn != NoExnVal {
-			return UnitVal, exn
-		}
-		o2, exn := runner.RunExpr(env, op.Right)
-		if exn != NoExnVal {
-			return UnitVal, exn
-		}
 		return add(o1, o2), NoExnVal
+	case "-":
+		return sub(o1, o2), NoExnVal
+	case "*":
+		return mult(o1, o2), NoExnVal
+	case "/":
+		return div(o1, o2), NoExnVal
 	default:
 		panic(fmt.Sprintf("Not implement operator '%s'", op.Op))
 	}

@@ -90,6 +90,15 @@ type IfExpr struct {
 func (t *IfExpr) Pos() lexer.Position { return t.TPos }
 func (t *IfExpr) exprType()           {}
 
+type ForExpr struct {
+	Cond Expr
+	Then Expr
+	TPos lexer.Position // need to have pos if children are empty
+}
+
+func (t *ForExpr) Pos() lexer.Position { return t.TPos }
+func (t *ForExpr) exprType()           {}
+
 type Nop struct {
 	TPos lexer.Position
 }

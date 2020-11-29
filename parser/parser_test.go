@@ -235,6 +235,32 @@ func TestParseAddExpr(t *testing.T) {
 	}
 }
 
+func TestParseOpExpr(t *testing.T) {
+	tests := []struct {
+		expr   string
+		expect string
+	}{
+		{"1 - 2", "-"},
+		{"1 * 2", "*"},
+		{"1 / 2", "/"},
+	}
+	for _, test := range tests {
+		p := NewParser(test.expr)
+		exprs, err := p.Parse()
+		if err != nil {
+			t.Error(err)
+		}
+		op, ok := exprs.Children[0].(*ast.OpExpr)
+		if !ok {
+			t.Errorf("Expected OpExpr, got %+v", exprs.Children[0])
+		}
+		if op.Op != test.expect {
+			t.Errorf("Expected +")
+
+		}
+	}
+}
+
 func parseForTest(t *testing.T, prog string) *ast.BlockExpr {
 	p := NewParser(prog)
 	exprs, err := p.Parse()

@@ -242,13 +242,16 @@ func (p *Parser) parsePipeExpr() (ast.Expr, bool) {
 func (p *Parser) parseAddExpr() (ast.Expr, bool) {
 	p.tokens.begin()
 
-	left, ok := p.parsePrimary()
+	left, ok := p.parseMultExpr()
 	if !ok {
 		p.tokens.rollback()
 		return nil, false
 	}
 
 	add, ok := p.tokens.expectGetOp("+")
+	if !ok {
+		add, ok = p.tokens.expectGetOp("-")
+	}
 	if ok {
 		right, ok := p.parseAddExpr()
 		if ok {
@@ -259,6 +262,38 @@ func (p *Parser) parseAddExpr() (ast.Expr, bool) {
 			p.error(fmt.Sprintf("Expected an expression after this '%s'", add.Lit), add.Pos)
 			p.tokens.commit()
 			return &ast.Bad{add.Pos}, true
+		}
+	}
+
+	p.tokens.commit()
+	return left, true
+}
+
+// MultExpr ->
+//   | UnaryExpr (<mult_op> MultExpr)
+func (p *Parser) parseMultExpr() (ast.Expr, bool) {
+	p.tokens.begin()
+
+	left, ok := p.parsePrimary()
+	if !ok {
+		p.tokens.rollback()
+		return nil, false
+	}
+
+	op, ok := p.tokens.expectGetOp("*")
+	if !ok {
+		op, ok = p.tokens.expectGetOp("/")
+	}
+	if ok {
+		right, ok := p.parseMultExpr()
+		if ok {
+			p.tokens.commit()
+			return &ast.OpExpr{left, right, op.Lit}, true
+		} else {
+			// Continue parsing anyway
+			p.error(fmt.Sprintf("Expected an expression after this '%s'", op.Lit), op.Pos)
+			p.tokens.commit()
+			return &ast.Bad{op.Pos}, true
 		}
 	}
 
@@ -352,6 +387,10 @@ func (p *Parser) parseAtomExpr() (ast.Expr, bool) {
 	iff, ok := p.parseIfExpr()
 	if ok {
 		return iff, true
+	}
+	forExpr, ok := p.parseForExpr()
+	if ok {
+		return forExpr, true
 	}
 	fn, ok := p.parseFnDefExpr()
 	if ok {
@@ -466,6 +505,46 @@ func (p *Parser) parseIfExpr() (ast.Expr, bool) {
 	p.tokens.popEolSignificance()
 	p.tokens.commit()
 	return &ast.IfExpr{cond, then, elsee, iff.Pos}, true
+}
+
+func (p *Parser) parseForExpr() (ast.Expr, bool) {
+	p.tokens.begin()
+
+	forTok, ok := p.tokens.expectGet(lexer.FOR)
+	if !ok {
+		p.tokens.rollback()
+		return nil, false
+	}
+
+	// ignore EOL
+	p.tokens.beginEolSignificance(false)
+	cond, ok := p.parseMultiExpr()
+	if !ok {
+		// TODO
+		panic("not implemented forexpr cond error case")
+	}
+
+	_, ok = p.tokens.expectGet(lexer.LBRACE)
+	if !ok {
+		// TODO
+		panic("not implemented forexpr '{' error case")
+	}
+
+	then, ok := p.parseBlockExpr()
+	if !ok {
+		// TODO
+		panic("not implemented forexpr then error case")
+	}
+
+	_, ok = p.tokens.expectGet(lexer.RBRACE)
+	if !ok {
+		// TODO
+		panic("not implemented forexpr '}' error case")
+	}
+
+	p.tokens.popEolSignificance()
+	p.tokens.commit() // Commit our if
+	return &ast.ForExpr{cond, then, forTok.Pos}, true
 }
 
 func (p *Parser) parseFnDefExpr() (ast.Expr, bool) {

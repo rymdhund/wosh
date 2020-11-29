@@ -48,6 +48,10 @@ func TestEvalMany(t *testing.T) {
 	}{
 		{"res = 1 + 2", IntVal(3)},
 		{"res = (1 + 2)", IntVal(3)},
+		{"res = 2 * 2", IntVal(4)},
+		{"res = 2 + 3 * 4 - 5", IntVal(9)},
+		{"res = 3 + 3 / 3", IntVal(4)},
+		{"res = 3 / 3 + 3", IntVal(4)},
 		{"res = 'abc'", StrVal("abc")},
 		{"a = 0\nres = 1 + 2", IntVal(3)},
 		{"a = 0\n if a { res = 1 } else { res = 2 }", IntVal(2)},
@@ -103,5 +107,19 @@ func TestEvalFunc(t *testing.T) {
 	o, _ := r.baseEnv.get("res")
 	if !Equal(o, IntVal(3)) {
 		t.Errorf("Expected int(3), got %v", o)
+	}
+}
+
+func TestEvalFor(t *testing.T) {
+	r := runner(t, `
+	x = 3
+	for x {
+		x = x - 1
+	}
+	`)
+	r.Run()
+	o, _ := r.baseEnv.get("x")
+	if !Equal(o, IntVal(0)) {
+		t.Errorf("Expected int(0), got %v", o)
 	}
 }

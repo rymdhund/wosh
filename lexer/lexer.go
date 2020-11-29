@@ -30,6 +30,7 @@ const (
 	ELSE
 	FN
 	COMMENT
+	FOR
 )
 
 var tokens = []string{
@@ -56,6 +57,7 @@ var tokens = []string{
 	ELSE:     "ELSE",
 	FN:       "FN",
 	COMMENT:  "COMMENT",
+	FOR:      "FOR",
 }
 
 func (t Token) String() string {
@@ -316,6 +318,8 @@ func (l *Lexer) lexIdentOrKw() TokenItem {
 		return TokenItem{ELSE, lit, pos}
 	case "fn":
 		return TokenItem{FN, lit, pos}
+	case "for":
+		return TokenItem{FOR, lit, pos}
 	default:
 		return TokenItem{IDENT, lit, pos}
 	}
@@ -323,7 +327,7 @@ func (l *Lexer) lexIdentOrKw() TokenItem {
 
 // Operators are sequences of +*-=!
 func isOp(r rune) bool {
-	return r == '+' || r == '*' || r == '-' || r == '=' || r == '!'
+	return r == '+' || r == '-' || r == '*' || r == '/' || r == '=' || r == '!'
 }
 
 func (l *Lexer) lexOp() TokenItem {

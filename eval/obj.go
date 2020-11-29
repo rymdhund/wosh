@@ -115,6 +115,42 @@ func add(o1, o2 Object) Object {
 	return IntVal(i1.val + i2.val)
 }
 
+func sub(o1, o2 Object) Object {
+	i1, ok := o1.(*IntObject)
+	if !ok {
+		panic("trying to sub non-integer")
+	}
+	i2, ok := o2.(*IntObject)
+	if !ok {
+		panic("trying to sub non-integer")
+	}
+	return IntVal(i1.val - i2.val)
+}
+
+func mult(o1, o2 Object) Object {
+	i1, ok := o1.(*IntObject)
+	if !ok {
+		panic("trying to mult non-integer")
+	}
+	i2, ok := o2.(*IntObject)
+	if !ok {
+		panic("trying to mult non-integer")
+	}
+	return IntVal(i1.val * i2.val)
+}
+
+func div(o1, o2 Object) Object {
+	i1, ok := o1.(*IntObject)
+	if !ok {
+		panic("trying to div non-integer")
+	}
+	i2, ok := o2.(*IntObject)
+	if !ok {
+		panic("trying to div non-integer")
+	}
+	return IntVal(i1.val / i2.val)
+}
+
 func IntVal(n int) *IntObject {
 	return &IntObject{val: n}
 }

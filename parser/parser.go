@@ -274,7 +274,7 @@ func (p *Parser) parseAddExpr() (ast.Expr, bool) {
 func (p *Parser) parseMultExpr() (ast.Expr, bool) {
 	p.tokens.begin()
 
-	left, ok := p.parsePrimary()
+	left, ok := p.parseUnaryExpr()
 	if !ok {
 		p.tokens.rollback()
 		return nil, false
@@ -299,6 +299,29 @@ func (p *Parser) parseMultExpr() (ast.Expr, bool) {
 
 	p.tokens.commit()
 	return left, true
+}
+
+// UnaryExpr ->
+//   | PowerExpr
+//   | "-" UnaryExpr
+func (p *Parser) parseUnaryExpr() (ast.Expr, bool) {
+	p.tokens.begin()
+
+	sub, ok := p.tokens.expectGetOp("-")
+	if ok {
+		right, ok := p.parseUnaryExpr()
+		if ok {
+			p.tokens.commit()
+			return &ast.UnaryExpr{sub.Lit, right, sub.Pos}, true
+		} else {
+			p.tokens.rollback()
+			return nil, false
+		}
+	} else {
+		prim, ok := p.parsePrimary()
+		p.tokens.commit()
+		return prim, ok
+	}
 }
 
 // PrimaryExpr := f

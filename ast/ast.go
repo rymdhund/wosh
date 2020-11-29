@@ -123,6 +123,15 @@ type OpExpr struct {
 func (t *OpExpr) Pos() lexer.Position { return t.Left.Pos() }
 func (t *OpExpr) exprType()           {}
 
+type UnaryExpr struct {
+	Op    string
+	Right Expr
+	TPos  lexer.Position
+}
+
+func (t *UnaryExpr) Pos() lexer.Position { return t.TPos }
+func (t *UnaryExpr) exprType()           {}
+
 type CommandExpr struct {
 	CmdParts []string
 	TPos     lexer.Position

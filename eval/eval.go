@@ -56,6 +56,8 @@ func (runner *Runner) RunExpr(env *Env, exp ast.Expr) (Object, Exception) {
 		return runner.RunIdentExpr(env, v)
 	case *ast.OpExpr:
 		return runner.RunOpExpr(env, v)
+	case *ast.UnaryExpr:
+		return runner.RunUnaryExpr(env, v)
 	case *ast.IfExpr:
 		cond, exn := runner.RunExpr(env, v.Cond)
 		if exn != NoExnVal {
@@ -143,6 +145,19 @@ func (runner *Runner) RunOpExpr(env *Env, op *ast.OpExpr) (Object, Exception) {
 		return mult(o1, o2), NoExnVal
 	case "/":
 		return div(o1, o2), NoExnVal
+	default:
+		panic(fmt.Sprintf("Not implement operator '%s'", op.Op))
+	}
+}
+
+func (runner *Runner) RunUnaryExpr(env *Env, op *ast.UnaryExpr) (Object, Exception) {
+	o, exn := runner.RunExpr(env, op.Right)
+	if exn != NoExnVal {
+		return UnitVal, exn
+	}
+	switch op.Op {
+	case "-":
+		return neg(o), NoExnVal
 	default:
 		panic(fmt.Sprintf("Not implement operator '%s'", op.Op))
 	}

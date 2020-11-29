@@ -151,6 +151,14 @@ func div(o1, o2 Object) Object {
 	return IntVal(i1.val / i2.val)
 }
 
+func neg(o Object) Object {
+	i, ok := o.(*IntObject)
+	if !ok {
+		panic("trying to negate non-integer")
+	}
+	return IntVal(-i.val)
+}
+
 func IntVal(n int) *IntObject {
 	return &IntObject{val: n}
 }

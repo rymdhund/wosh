@@ -57,6 +57,8 @@ func TestEvalMany(t *testing.T) {
 		{"res = -(-2)", IntVal(2)},
 		{"res = -2 - -2", IntVal(0)},
 		{"res = 'abc'", StrVal("abc")},
+		{"res = 'abc' + 'def'", StrVal("abcdef")},
+		{"res = 'one' + str(1)", StrVal("one1")},
 		{"a = 0\nres = 1 + 2", IntVal(3)},
 		{"a = 0\n if a { res = 1 } else { res = 2 }", IntVal(2)},
 		{`if 1 { res = 2 } else { res = 3 }`, IntVal(2)},

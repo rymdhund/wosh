@@ -235,6 +235,16 @@ func (runner *Runner) RunCallExpr(env *Env, call *ast.CallExpr) (Object, Excepti
 			return UnitVal, ExnVal(err.Error(), call.Ident.Name, call.Pos().Line)
 		}
 		return UnitVal, ExnVal(s, "raise", call.Pos().Line)
+	case "str":
+		if len(call.Args) != 1 {
+			panic("Expected 1 argument to str()")
+		}
+		param, exn := runner.RunExpr(env, call.Args[0])
+		if exn != NoExnVal {
+			return UnitVal, exn
+		}
+		s := str(param)
+		return s, NoExnVal
 	default:
 		obj, exn := runner.RunIdentExpr(env, call.Ident)
 		if exn != NoExnVal {

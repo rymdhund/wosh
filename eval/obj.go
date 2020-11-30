@@ -3,6 +3,7 @@ package eval
 import (
 	"fmt"
 	"reflect"
+	"strconv"
 )
 
 // An entry in a stack trace
@@ -104,15 +105,22 @@ func (t *UnitObject) String() string {
 }
 
 func add(o1, o2 Object) Object {
-	i1, ok := o1.(*IntObject)
-	if !ok {
-		panic("trying to add non-integer")
+	switch t1 := o1.(type) {
+	case *IntObject:
+		i2, ok := o2.(*IntObject)
+		if !ok {
+			panic(fmt.Sprintf("trying to add %s and %s", t1.Type(), o2.Type()))
+		}
+		return IntVal(t1.val + i2.val)
+	case *StringObject:
+		i2, ok := o2.(*StringObject)
+		if !ok {
+			panic(fmt.Sprintf("trying to add %s and %s", t1.Type(), o2.Type()))
+		}
+		return StrVal(t1.val + i2.val)
+	default:
+		panic(fmt.Sprintf("trying to add %s and %s", t1.Type(), o2.Type()))
 	}
-	i2, ok := o2.(*IntObject)
-	if !ok {
-		panic("trying to add non-integer")
-	}
-	return IntVal(i1.val + i2.val)
 }
 
 func sub(o1, o2 Object) Object {
@@ -157,6 +165,14 @@ func neg(o Object) Object {
 		panic("trying to negate non-integer")
 	}
 	return IntVal(-i.val)
+}
+
+func str(o Object) *StringObject {
+	i, ok := o.(*IntObject)
+	if !ok {
+		panic("trying to str non-integer")
+	}
+	return StrVal(strconv.Itoa(i.val))
 }
 
 func IntVal(n int) *IntObject {

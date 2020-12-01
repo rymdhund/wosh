@@ -607,10 +607,10 @@ func (p *Parser) parseFnDefExpr() (ast.Expr, bool) {
 	params := []string{}
 	for true {
 		param, ok := p.parseIdent()
-		params = append(params, param.Name)
 		if !ok {
 			break
 		}
+		params = append(params, param.Name)
 		if !p.tokens.expect(lexer.COMMA) {
 			break
 		}

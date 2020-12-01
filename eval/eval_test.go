@@ -133,6 +133,21 @@ func TestEvalFunc(t *testing.T) {
 	}
 }
 
+func TestFuncNoParam(t *testing.T) {
+	r := runner(t, `
+	x = 3
+	fn foo() {
+		x + 1
+	}
+	res = foo()
+	`)
+	r.Run()
+	o, _ := r.baseEnv.get("res")
+	if !Equal(o, IntVal(4)) {
+		t.Errorf("Expected int(4), got %v", o)
+	}
+}
+
 func TestEvalFor(t *testing.T) {
 	r := runner(t, `
 	x = 3

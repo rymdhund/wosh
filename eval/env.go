@@ -36,6 +36,9 @@ func (env *Env) put(key string, obj Object) {
 
 func (env *Env) get(key string) (Object, bool) {
 	o, ok := env.vars[key]
+	if !ok && env.outer != nil {
+		return env.outer.get(key)
+	}
 	return o, ok
 }
 

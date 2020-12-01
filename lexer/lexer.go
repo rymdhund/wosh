@@ -11,6 +11,7 @@ const (
 	ILLEGAL
 	IDENT
 	INT
+	BOOL
 	STRING
 	COMMAND
 	EOL
@@ -39,6 +40,7 @@ var tokens = []string{
 	ILLEGAL:  "ILLEGAL",
 	IDENT:    "IDENT",
 	INT:      "INT",
+	BOOL:     "BOOL",
 	STRING:   "STRING",
 	COMMAND:  "COMMAND",
 	EOL:      "EOL",
@@ -148,6 +150,22 @@ func (l *Lexer) LexTokenItem() TokenItem {
 			return TokenItem{EOF, "", l.pos}
 		}
 
+		// two letter lookahead
+		r2 := l.peekn(2)
+		switch r2 {
+		case "==", "!=", ">=", "<=":
+			l.popn(2)
+			l.step(2)
+			return TokenItem{OP, r2, l.pos}
+		case "1|", "2|", "*|":
+			l.popn(2)
+			l.step(2)
+			return TokenItem{PIPE_OP, r2, l.pos}
+		case "<-":
+			return l.lexCapture()
+		default:
+		}
+
 		switch r {
 		case '\n':
 			l.pop()
@@ -203,18 +221,6 @@ func (l *Lexer) LexTokenItem() TokenItem {
 			return l.lexStringAndCmd()
 		case '#':
 			return l.lexComment()
-		default:
-		}
-
-		// two letter lookahead
-		r2 := l.peekn(2)
-		switch r2 {
-		case "1|", "2|", "*|":
-			l.popn(2)
-			l.step(2)
-			return TokenItem{PIPE_OP, r2, l.pos}
-		case "<-":
-			return l.lexCapture()
 		default:
 		}
 
@@ -314,6 +320,10 @@ func (l *Lexer) lexIdentOrKw() TokenItem {
 	l.step(len(lit))
 
 	switch lit {
+	case "true":
+		return TokenItem{BOOL, lit, pos}
+	case "false":
+		return TokenItem{BOOL, lit, pos}
 	case "if":
 		return TokenItem{IF, lit, pos}
 	case "else":
@@ -329,7 +339,7 @@ func (l *Lexer) lexIdentOrKw() TokenItem {
 
 // Operators are sequences of +*-=!
 func isOp(r rune) bool {
-	return r == '+' || r == '-' || r == '*' || r == '/' || r == '=' || r == '!'
+	return r == '+' || r == '-' || r == '*' || r == '/' || r == '=' || r == '!' || r == '>' || r == '<'
 }
 
 func (l *Lexer) lexOp() TokenItem {

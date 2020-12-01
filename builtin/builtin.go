@@ -90,3 +90,11 @@ func Get(o Object, idx Object) (Object, bool) {
 	}
 	return lst.Get(i.Val)
 }
+
+func Eq(o1, o2 Object) Object {
+	return BoolVal(o1.Eq(o2))
+}
+
+func Neq(o1, o2 Object) Object {
+	return BoolVal(!o1.Eq(o2))
+}

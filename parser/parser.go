@@ -209,7 +209,7 @@ func (p *Parser) parseAssignExpr() (ast.Expr, bool) {
 func (p *Parser) parsePipeExpr() (ast.Expr, bool) {
 	p.tokens.begin()
 
-	left, ok := p.parseAddExpr() // TODO: make this redirect expr
+	left, ok := p.parseCompExpr() // TODO: make this redirect expr
 	if !ok {
 		p.tokens.rollback()
 		return nil, false
@@ -235,6 +235,38 @@ func (p *Parser) parsePipeExpr() (ast.Expr, bool) {
 
 	p.tokens.commit()
 	return left, true
+}
+
+// CompExpr ->
+//   | AddExpr (<comp-op> AddExpr)*
+func (p *Parser) parseCompExpr() (ast.Expr, bool) {
+	p.tokens.begin()
+
+	expr, ok := p.parseAddExpr()
+	if !ok {
+		p.tokens.rollback()
+		return nil, false
+	}
+
+	for true {
+		op := p.tokens.peek()
+		if op.Tok == lexer.OP && (op.Lit == "==" || op.Lit == "!=" || op.Lit == ">=" || op.Lit == "<=" || op.Lit == ">" || op.Lit == "<") {
+			p.tokens.pop()
+			right, ok := p.parseAddExpr()
+			if ok {
+				expr = &ast.OpExpr{expr, right, op.Lit}
+			} else {
+				// Continue parsing anyway
+				p.error(fmt.Sprintf("Expected an expression after this '%s'", op.Lit), op.Pos)
+				p.tokens.commit()
+				return &ast.Bad{op.Pos}, true
+			}
+		} else {
+			p.tokens.commit()
+			return expr, true
+		}
+	}
+	panic("unreachable")
 }
 
 // AddExpr ->
@@ -462,6 +494,10 @@ func (p *Parser) parseIdent() (*ast.Ident, bool) {
 
 func (p *Parser) parseBasicLit() (ast.Expr, bool) {
 	if p.tokens.peekToken() == lexer.INT {
+		item := p.tokens.pop()
+		return &ast.BasicLit{item.Pos, item.Tok, item.Lit}, true
+	}
+	if p.tokens.peekToken() == lexer.BOOL {
 		item := p.tokens.pop()
 		return &ast.BasicLit{item.Pos, item.Tok, item.Lit}, true
 	}

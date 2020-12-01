@@ -77,13 +77,17 @@ func TestEvalMany(t *testing.T) {
 		{"res = 4 - 2 - 2", IntVal(0)},
 		{"res = 4 / 2 / 2", IntVal(1)},
 		{"res = 'abc'", StrVal("abc")},
+		{"res = 1 == 1", BoolVal(true)},
+		{"res = 1 != 1", BoolVal(false)},
+		{"res = 1 == 0", BoolVal(false)},
+		{"res = 1 != 0", BoolVal(true)},
 		{"res = 'abc' + 'def'", StrVal("abcdef")},
 		{"res = 'one' + str(1)", StrVal("one1")},
 		{"a = 0\nres = 1 + 2", IntVal(3)},
-		{"a = 0\n if a { res = 1 } else { res = 2 }", IntVal(2)},
-		{`if 1 { res = 2 } else { res = 3 }`, IntVal(2)},
-		{`res = if 1 { 2 } else { 3 }`, IntVal(2)},
-		{`res = if 0 { 2 }`, UnitVal},
+		{"a = false\n if a { res = 1 } else { res = 2 }", IntVal(2)},
+		{`if true { res = 2 } else { res = 3 }`, IntVal(2)},
+		{`res = if 1 == 1 { 2 } else { 3 }`, IntVal(2)},
+		{`res = if false { 2 }`, UnitVal},
 		{"res <- echo('abc')", StrVal("abc\n")},
 		{"res <-2 echo_err('abc')", StrVal("abc\n")},
 		{"res = echo('abc')", UnitVal},
@@ -109,7 +113,7 @@ func TestEvalError(t *testing.T) {
 	}{
 		{"res <-? raise('test')", "exception"},
 		{"res <-? `diff`", "exit"},
-		{"res <-? if 1 { raise(2) }", "exception"},
+		{"res <-? if true { raise(2) }", "exception"},
 	}
 	for _, test := range tests {
 		prog, expected := test.prog, test.exp
@@ -154,7 +158,7 @@ func TestFuncNoParam(t *testing.T) {
 func TestEvalFor(t *testing.T) {
 	r := runner(t, `
 	x = 3
-	for x {
+	for x != 0 {
 		x = x - 1
 	}
 	`)

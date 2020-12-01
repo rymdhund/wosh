@@ -151,6 +151,10 @@ func (runner *Runner) RunOpExpr(env *Env, op *ast.OpExpr) (Object, Exception) {
 		return builtin.Mult(o1, o2), NoExnVal
 	case "/":
 		return builtin.Div(o1, o2), NoExnVal
+	case "==":
+		return builtin.Eq(o1, o2), NoExnVal
+	case "!=":
+		return builtin.Neq(o1, o2), NoExnVal
 	default:
 		panic(fmt.Sprintf("Not implement operator '%s'", op.Op))
 	}
@@ -339,6 +343,14 @@ func objectFromBasicLit(lit *ast.BasicLit) (Object, Exception) {
 			panic(fmt.Sprintf("Expected int in basic lit: %s", err))
 		}
 		return IntVal(n), NoExnVal
+	case lexer.BOOL:
+		if lit.Value == "true" {
+			return BoolVal(true), NoExnVal
+		} else if lit.Value == "false" {
+			return BoolVal(false), NoExnVal
+		} else {
+			panic(fmt.Sprintf("Expected bool in basic lit: %s", lit.Value))
+		}
 	case lexer.STRING:
 		s := lit.Value[1 : len(lit.Value)-1]
 		return StrVal(s), NoExnVal

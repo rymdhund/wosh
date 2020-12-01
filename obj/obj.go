@@ -3,6 +3,8 @@ package obj
 import (
 	"fmt"
 	"reflect"
+
+	"github.com/rymdhund/wosh/ast"
 )
 
 // An entry in a stack trace
@@ -13,6 +15,7 @@ type StackEntry struct {
 
 type Object interface {
 	Type() string
+	Eq(Object) bool
 }
 
 type Exception interface {
@@ -38,6 +41,14 @@ func (t *StringObject) String() string {
 	return fmt.Sprintf("%s(%v)", t.Type(), t.Val)
 }
 
+func (t *StringObject) Eq(o Object) bool {
+	x, ok := o.(*StringObject)
+	if !ok {
+		return false
+	}
+	return x.Val == t.Val
+}
+
 type IntObject struct {
 	Val int
 }
@@ -48,6 +59,34 @@ func (t *IntObject) Type() string {
 
 func (t *IntObject) String() string {
 	return fmt.Sprintf("%s(%v)", t.Type(), t.Val)
+}
+
+func (t *IntObject) Eq(o Object) bool {
+	x, ok := o.(*IntObject)
+	if !ok {
+		return false
+	}
+	return x.Val == t.Val
+}
+
+type BoolObject struct {
+	Val bool
+}
+
+func (t *BoolObject) Type() string {
+	return "bool"
+}
+
+func (t *BoolObject) String() string {
+	return fmt.Sprintf("%s(%v)", t.Type(), t.Val)
+}
+
+func (t *BoolObject) Eq(o Object) bool {
+	x, ok := o.(*BoolObject)
+	if !ok {
+		return false
+	}
+	return x.Val == t.Val
 }
 
 type ExnObject struct {
@@ -61,6 +100,14 @@ func (t *ExnObject) Type() string {
 
 func (t *ExnObject) String() string {
 	return fmt.Sprintf("%s(%v)", t.Type(), t.Val)
+}
+
+func (t *ExnObject) Eq(o Object) bool {
+	x, ok := o.(*ExnObject)
+	if !ok {
+		return false
+	}
+	return x == t
 }
 
 func (t *ExnObject) Msg() string {
@@ -103,6 +150,11 @@ func (t *UnitObject) String() string {
 	return "()"
 }
 
+func (t *UnitObject) Eq(o Object) bool {
+	_, ok := o.(*UnitObject)
+	return ok
+}
+
 type ListNode struct {
 	Val  Object
 	next *ListNode
@@ -118,6 +170,30 @@ func (t *ListObject) Type() string {
 
 func (t *ListObject) String() string {
 	return "[]"
+}
+
+func (t *ListObject) Eq(o Object) bool {
+	x, ok := o.(*ListObject)
+	if !ok {
+		return false
+	}
+	a := t.head
+	b := x.head
+
+	for true {
+		if a == nil {
+			return b == nil
+		} else if b == nil {
+			return false
+		} else if !a.Val.Eq(b.Val) {
+			return false
+		}
+		a = a.next
+		b = b.next
+	}
+
+	// unrearchable
+	return false
 }
 
 // Returns (nil, false) in case of out of bounds error
@@ -158,8 +234,28 @@ func (t *ListObject) Add(o Object) {
 	cur.next = e
 }
 
+type FunctionObject struct {
+	Expr *ast.FuncExpr
+}
+
+func (f *FunctionObject) Type() string {
+	return "func"
+}
+
+func (t *FunctionObject) Eq(o Object) bool {
+	x, ok := o.(*FunctionObject)
+	if !ok {
+		return false
+	}
+	return x == t
+}
+
 func IntVal(n int) *IntObject {
 	return &IntObject{Val: n}
+}
+
+func BoolVal(b bool) *BoolObject {
+	return &BoolObject{Val: b}
 }
 
 func StrVal(s string) *StringObject {
@@ -201,9 +297,9 @@ func GetString(o Object) (string, error) {
 }
 
 func GetBool(o Object) bool {
-	n, ok := o.(*IntObject)
+	n, ok := o.(*BoolObject)
 	if !ok {
 		panic(fmt.Sprintf("Trying to use value of type '%s' as bool", o.Type()))
 	}
-	return n.Val != 0
+	return n.Val
 }

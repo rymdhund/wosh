@@ -10,7 +10,9 @@ import (
 	"syscall"
 
 	"github.com/rymdhund/wosh/ast"
+	"github.com/rymdhund/wosh/builtin"
 	"github.com/rymdhund/wosh/lexer"
+	. "github.com/rymdhund/wosh/obj"
 )
 
 type Runner struct {
@@ -142,13 +144,13 @@ func (runner *Runner) RunOpExpr(env *Env, op *ast.OpExpr) (Object, Exception) {
 	}
 	switch op.Op {
 	case "+":
-		return add(o1, o2), NoExnVal
+		return builtin.Add(o1, o2), NoExnVal
 	case "-":
-		return sub(o1, o2), NoExnVal
+		return builtin.Sub(o1, o2), NoExnVal
 	case "*":
-		return mult(o1, o2), NoExnVal
+		return builtin.Mult(o1, o2), NoExnVal
 	case "/":
-		return div(o1, o2), NoExnVal
+		return builtin.Div(o1, o2), NoExnVal
 	default:
 		panic(fmt.Sprintf("Not implement operator '%s'", op.Op))
 	}
@@ -161,7 +163,7 @@ func (runner *Runner) RunUnaryExpr(env *Env, op *ast.UnaryExpr) (Object, Excepti
 	}
 	switch op.Op {
 	case "-":
-		return neg(o), NoExnVal
+		return builtin.Neg(o), NoExnVal
 	default:
 		panic(fmt.Sprintf("Not implement operator '%s'", op.Op))
 	}
@@ -195,7 +197,7 @@ func (runner *Runner) RunSubscrExpr(env *Env, sub *ast.SubscrExpr) (Object, Exce
 		return UnitVal, exn
 	}
 
-	v, ok := get(o, idx)
+	v, ok := builtin.Get(o, idx)
 	if !ok {
 		return UnitVal, ExnVal("out of bounds", "", sub.Pos().Line)
 	}
@@ -283,14 +285,14 @@ func (runner *Runner) RunCallExpr(env *Env, call *ast.CallExpr) (Object, Excepti
 		if exn != NoExnVal {
 			return UnitVal, exn
 		}
-		s := str(param)
+		s := builtin.Str(param)
 		return s, NoExnVal
 	default:
-		obj, exn := runner.RunIdentExpr(env, call.Ident)
+		o, exn := runner.RunIdentExpr(env, call.Ident)
 		if exn != NoExnVal {
 			return UnitVal, exn
 		}
-		f, ok := obj.(*FunctionObject)
+		f, ok := o.(*FunctionObject)
 		if !ok {
 			panic("cannot call non-function")
 		}

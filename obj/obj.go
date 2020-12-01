@@ -1,9 +1,8 @@
-package eval
+package obj
 
 import (
 	"fmt"
 	"reflect"
-	"strconv"
 )
 
 // An entry in a stack trace
@@ -28,7 +27,7 @@ func Equal(o1, o2 Object) bool {
 }
 
 type StringObject struct {
-	val string
+	Val string
 }
 
 func (t *StringObject) Type() string {
@@ -36,11 +35,11 @@ func (t *StringObject) Type() string {
 }
 
 func (t *StringObject) String() string {
-	return fmt.Sprintf("%s(%v)", t.Type(), t.val)
+	return fmt.Sprintf("%s(%v)", t.Type(), t.Val)
 }
 
 type IntObject struct {
-	val int
+	Val int
 }
 
 func (t *IntObject) Type() string {
@@ -48,11 +47,11 @@ func (t *IntObject) Type() string {
 }
 
 func (t *IntObject) String() string {
-	return fmt.Sprintf("%s(%v)", t.Type(), t.val)
+	return fmt.Sprintf("%s(%v)", t.Type(), t.Val)
 }
 
 type ExnObject struct {
-	val   string
+	Val   string
 	stack []StackEntry
 }
 
@@ -61,11 +60,11 @@ func (t *ExnObject) Type() string {
 }
 
 func (t *ExnObject) String() string {
-	return fmt.Sprintf("%s(%v)", t.Type(), t.val)
+	return fmt.Sprintf("%s(%v)", t.Type(), t.Val)
 }
 
 func (t *ExnObject) Msg() string {
-	return t.val
+	return t.Val
 }
 
 func (t *ExnObject) AddStackEntry(entry StackEntry) {
@@ -105,7 +104,7 @@ func (t *UnitObject) String() string {
 }
 
 type ListNode struct {
-	val  Object
+	Val  Object
 	next *ListNode
 }
 
@@ -134,7 +133,7 @@ func (t *ListObject) Get(idx int) (Object, bool) {
 		}
 
 		if idx == 0 {
-			return cur.val, true
+			return cur.Val, true
 		}
 
 		cur = cur.next
@@ -146,7 +145,7 @@ func (t *ListObject) Get(idx int) (Object, bool) {
 }
 
 func (t *ListObject) Add(o Object) {
-	e := &ListNode{val: o, next: nil}
+	e := &ListNode{Val: o, next: nil}
 	if t.head == nil {
 		t.head = e
 		return
@@ -159,96 +158,12 @@ func (t *ListObject) Add(o Object) {
 	cur.next = e
 }
 
-func add(o1, o2 Object) Object {
-	switch t1 := o1.(type) {
-	case *IntObject:
-		i2, ok := o2.(*IntObject)
-		if !ok {
-			panic(fmt.Sprintf("trying to add %s and %s", t1.Type(), o2.Type()))
-		}
-		return IntVal(t1.val + i2.val)
-	case *StringObject:
-		i2, ok := o2.(*StringObject)
-		if !ok {
-			panic(fmt.Sprintf("trying to add %s and %s", t1.Type(), o2.Type()))
-		}
-		return StrVal(t1.val + i2.val)
-	default:
-		panic(fmt.Sprintf("trying to add %s and %s", t1.Type(), o2.Type()))
-	}
-}
-
-func sub(o1, o2 Object) Object {
-	i1, ok := o1.(*IntObject)
-	if !ok {
-		panic("trying to sub non-integer")
-	}
-	i2, ok := o2.(*IntObject)
-	if !ok {
-		panic("trying to sub non-integer")
-	}
-	return IntVal(i1.val - i2.val)
-}
-
-func mult(o1, o2 Object) Object {
-	i1, ok := o1.(*IntObject)
-	if !ok {
-		panic("trying to mult non-integer")
-	}
-	i2, ok := o2.(*IntObject)
-	if !ok {
-		panic("trying to mult non-integer")
-	}
-	return IntVal(i1.val * i2.val)
-}
-
-func div(o1, o2 Object) Object {
-	i1, ok := o1.(*IntObject)
-	if !ok {
-		panic("trying to div non-integer")
-	}
-	i2, ok := o2.(*IntObject)
-	if !ok {
-		panic("trying to div non-integer")
-	}
-	return IntVal(i1.val / i2.val)
-}
-
-func neg(o Object) Object {
-	i, ok := o.(*IntObject)
-	if !ok {
-		panic("trying to negate non-integer")
-	}
-	return IntVal(-i.val)
-}
-
-func str(o Object) *StringObject {
-	i, ok := o.(*IntObject)
-	if !ok {
-		panic("trying to str non-integer")
-	}
-	return StrVal(strconv.Itoa(i.val))
-}
-
-func get(o Object, idx Object) (Object, bool) {
-	lst, ok := o.(*ListObject)
-	if !ok {
-		panic("trying to get() on non-list")
-	}
-
-	i, ok := idx.(*IntObject)
-	if !ok {
-		panic("trying to get() non-integer index")
-	}
-	return lst.Get(i.val)
-}
-
 func IntVal(n int) *IntObject {
-	return &IntObject{val: n}
+	return &IntObject{Val: n}
 }
 
 func StrVal(s string) *StringObject {
-	return &StringObject{val: s}
+	return &StringObject{Val: s}
 }
 
 func ExitVal(n int, cause string, line int) *ExitObject {
@@ -263,11 +178,11 @@ var UnitVal = &UnitObject{}
 
 func ExnVal(s string, cause string, line int) *ExnObject {
 	entry := StackEntry{cause, line}
-	return &ExnObject{val: s, stack: []StackEntry{entry}}
+	return &ExnObject{Val: s, stack: []StackEntry{entry}}
 }
 
 func ListVal(val Object, tail *ListObject) *ListObject {
-	node := ListNode{val: val, next: tail.head}
+	node := ListNode{Val: val, next: tail.head}
 	return &ListObject{head: &node}
 }
 
@@ -282,7 +197,7 @@ func GetString(o Object) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("Trying to use value of type '%s' as string", o.Type())
 	}
-	return s.val, nil
+	return s.Val, nil
 }
 
 func GetBool(o Object) bool {
@@ -290,5 +205,5 @@ func GetBool(o Object) bool {
 	if !ok {
 		panic(fmt.Sprintf("Trying to use value of type '%s' as bool", o.Type()))
 	}
-	return n.val != 0
+	return n.Val != 0
 }

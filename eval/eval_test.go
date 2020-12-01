@@ -3,6 +3,7 @@ package eval
 import (
 	"testing"
 
+	. "github.com/rymdhund/wosh/obj"
 	"github.com/rymdhund/wosh/parser"
 )
 

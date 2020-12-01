@@ -238,35 +238,37 @@ func (p *Parser) parsePipeExpr() (ast.Expr, bool) {
 }
 
 // AddExpr ->
-//   | MultExpr (<add_op> AddExpr)
+//   | MultExpr (<add_op> MultExpr)*
 func (p *Parser) parseAddExpr() (ast.Expr, bool) {
 	p.tokens.begin()
 
-	left, ok := p.parseMultExpr()
+	expr, ok := p.parseMultExpr()
 	if !ok {
 		p.tokens.rollback()
 		return nil, false
 	}
 
-	add, ok := p.tokens.expectGetOp("+")
-	if !ok {
-		add, ok = p.tokens.expectGetOp("-")
-	}
-	if ok {
-		right, ok := p.parseAddExpr()
+	for true {
+		op, ok := p.tokens.expectGetOp("+")
+		if !ok {
+			op, ok = p.tokens.expectGetOp("-")
+		}
 		if ok {
-			p.tokens.commit()
-			return &ast.OpExpr{left, right, add.Lit}, true
+			right, ok := p.parseMultExpr()
+			if ok {
+				expr = &ast.OpExpr{expr, right, op.Lit}
+			} else {
+				// Continue parsing anyway
+				p.error(fmt.Sprintf("Expected an expression after this '%s'", op.Lit), op.Pos)
+				p.tokens.commit()
+				return &ast.Bad{op.Pos}, true
+			}
 		} else {
-			// Continue parsing anyway
-			p.error(fmt.Sprintf("Expected an expression after this '%s'", add.Lit), add.Pos)
 			p.tokens.commit()
-			return &ast.Bad{add.Pos}, true
+			return expr, true
 		}
 	}
-
-	p.tokens.commit()
-	return left, true
+	panic("unreachable")
 }
 
 // MultExpr ->
@@ -274,31 +276,33 @@ func (p *Parser) parseAddExpr() (ast.Expr, bool) {
 func (p *Parser) parseMultExpr() (ast.Expr, bool) {
 	p.tokens.begin()
 
-	left, ok := p.parseUnaryExpr()
+	expr, ok := p.parseUnaryExpr()
 	if !ok {
 		p.tokens.rollback()
 		return nil, false
 	}
 
-	op, ok := p.tokens.expectGetOp("*")
-	if !ok {
-		op, ok = p.tokens.expectGetOp("/")
-	}
-	if ok {
-		right, ok := p.parseMultExpr()
+	for true {
+		op, ok := p.tokens.expectGetOp("*")
+		if !ok {
+			op, ok = p.tokens.expectGetOp("/")
+		}
 		if ok {
-			p.tokens.commit()
-			return &ast.OpExpr{left, right, op.Lit}, true
+			right, ok := p.parseUnaryExpr()
+			if ok {
+				expr = &ast.OpExpr{expr, right, op.Lit}
+			} else {
+				// Continue parsing anyway
+				p.error(fmt.Sprintf("Expected an expression after this '%s'", op.Lit), op.Pos)
+				p.tokens.commit()
+				return &ast.Bad{op.Pos}, true
+			}
 		} else {
-			// Continue parsing anyway
-			p.error(fmt.Sprintf("Expected an expression after this '%s'", op.Lit), op.Pos)
 			p.tokens.commit()
-			return &ast.Bad{op.Pos}, true
+			return expr, true
 		}
 	}
-
-	p.tokens.commit()
-	return left, true
+	panic("unreachable")
 }
 
 // UnaryExpr ->

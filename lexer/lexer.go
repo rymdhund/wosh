@@ -15,6 +15,7 @@ const (
 	COMMAND
 	EOL
 	COMMA
+	COLON
 	OP
 	PIPE_OP
 	SPACE
@@ -42,6 +43,7 @@ var tokens = []string{
 	COMMAND:  "COMMAND",
 	EOL:      "EOL",
 	COMMA:    ",",
+	COLON:    ":",
 	OP:       "OP",
 	SPACE:    "SPACE",
 	ASSIGN:   "=",

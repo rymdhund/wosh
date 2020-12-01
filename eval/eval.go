@@ -58,6 +58,10 @@ func (runner *Runner) RunExpr(env *Env, exp ast.Expr) (Object, Exception) {
 		return runner.RunOpExpr(env, v)
 	case *ast.UnaryExpr:
 		return runner.RunUnaryExpr(env, v)
+	case *ast.ListExpr:
+		return runner.RunListExpr(env, v)
+	case *ast.SubscrExpr:
+		return runner.RunSubscrExpr(env, v)
 	case *ast.IfExpr:
 		cond, exn := runner.RunExpr(env, v.Cond)
 		if exn != NoExnVal {
@@ -161,6 +165,42 @@ func (runner *Runner) RunUnaryExpr(env *Env, op *ast.UnaryExpr) (Object, Excepti
 	default:
 		panic(fmt.Sprintf("Not implement operator '%s'", op.Op))
 	}
+}
+
+func (runner *Runner) RunListExpr(env *Env, lst *ast.ListExpr) (Object, Exception) {
+	list := ListNil()
+
+	for _, expr := range lst.Elems {
+		o, exn := runner.RunExpr(env, expr)
+		if exn != NoExnVal {
+			return UnitVal, exn
+		}
+		list.Add(o)
+	}
+	return list, NoExnVal
+}
+
+func (runner *Runner) RunSubscrExpr(env *Env, sub *ast.SubscrExpr) (Object, Exception) {
+	o, exn := runner.RunExpr(env, sub.Prim)
+	if exn != NoExnVal {
+		return UnitVal, exn
+	}
+
+	if len(sub.Sub) != 1 {
+		panic("unexpected number of subscript elements")
+	}
+
+	idx, exn := runner.RunExpr(env, sub.Sub[0])
+	if exn != NoExnVal {
+		return UnitVal, exn
+	}
+
+	v, ok := get(o, idx)
+	if !ok {
+		return UnitVal, ExnVal("out of bounds", "", sub.Pos().Line)
+	}
+
+	return v, NoExnVal
 }
 
 func (runner *Runner) RunCommandExpr(env *Env, cmd *ast.CommandExpr) (Object, Exception) {

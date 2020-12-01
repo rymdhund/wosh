@@ -104,6 +104,61 @@ func (t *UnitObject) String() string {
 	return "()"
 }
 
+type ListNode struct {
+	val  Object
+	next *ListNode
+}
+
+type ListObject struct {
+	head *ListNode
+}
+
+func (t *ListObject) Type() string {
+	return "list"
+}
+
+func (t *ListObject) String() string {
+	return "[]"
+}
+
+// Returns (nil, false) in case of out of bounds error
+func (t *ListObject) Get(idx int) (Object, bool) {
+	if idx < 0 {
+		return nil, false
+	}
+
+	cur := t.head
+	for true {
+		if cur == nil {
+			return nil, false
+		}
+
+		if idx == 0 {
+			return cur.val, true
+		}
+
+		cur = cur.next
+		idx--
+	}
+
+	// unreachable
+	return nil, false
+}
+
+func (t *ListObject) Add(o Object) {
+	e := &ListNode{val: o, next: nil}
+	if t.head == nil {
+		t.head = e
+		return
+	}
+
+	cur := t.head
+	for cur.next != nil {
+		cur = cur.next
+	}
+	cur.next = e
+}
+
 func add(o1, o2 Object) Object {
 	switch t1 := o1.(type) {
 	case *IntObject:
@@ -175,6 +230,19 @@ func str(o Object) *StringObject {
 	return StrVal(strconv.Itoa(i.val))
 }
 
+func get(o Object, idx Object) (Object, bool) {
+	lst, ok := o.(*ListObject)
+	if !ok {
+		panic("trying to get() on non-list")
+	}
+
+	i, ok := idx.(*IntObject)
+	if !ok {
+		panic("trying to get() non-integer index")
+	}
+	return lst.Get(i.val)
+}
+
 func IntVal(n int) *IntObject {
 	return &IntObject{val: n}
 }
@@ -196,6 +264,15 @@ var UnitVal = &UnitObject{}
 func ExnVal(s string, cause string, line int) *ExnObject {
 	entry := StackEntry{cause, line}
 	return &ExnObject{val: s, stack: []StackEntry{entry}}
+}
+
+func ListVal(val Object, tail *ListObject) *ListObject {
+	node := ListNode{val: val, next: tail.head}
+	return &ListObject{head: &node}
+}
+
+func ListNil() *ListObject {
+	return &ListObject{head: nil}
 }
 
 var NoExnVal = &ExnObject{}

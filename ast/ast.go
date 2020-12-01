@@ -148,3 +148,19 @@ type FuncExpr struct {
 
 func (t *FuncExpr) Pos() lexer.Position { return t.TPos }
 func (t *FuncExpr) exprType()           {}
+
+type ListExpr struct {
+	Elems []Expr
+	TPos  lexer.Position
+}
+
+func (t *ListExpr) Pos() lexer.Position { return t.TPos }
+func (t *ListExpr) exprType()           {}
+
+type SubscrExpr struct {
+	Prim Expr
+	Sub  []Expr
+}
+
+func (t *SubscrExpr) Pos() lexer.Position { return t.Prim.Pos() }
+func (t *SubscrExpr) exprType()           {}

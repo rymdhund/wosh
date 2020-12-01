@@ -318,16 +318,33 @@ func (p *Parser) parseUnaryExpr() (ast.Expr, bool) {
 			return nil, false
 		}
 	} else {
-		prim, ok := p.parsePrimary()
+		prim, ok := p.parseSubscrExpr()
 		p.tokens.commit()
 		return prim, ok
 	}
 }
 
+// SubscrExpr ->
+//  | PrimaryExpr [ SubscrExpr ]
+func (p *Parser) parseSubscrExpr() (ast.Expr, bool) {
+	prim, ok := p.parsePrimary()
+	if !ok {
+		return prim, ok
+	}
+
+	elems, _, ok := p.parseEnclosure(lexer.LBRACKET, lexer.RBRACKET, lexer.COLON)
+	if !ok {
+		return prim, true
+	}
+
+	// TODO: check number of elems!
+
+	return &ast.SubscrExpr{prim, elems}, true
+}
+
 // PrimaryExpr := f
 //  | CallExpr
 //  | AttrExpr
-//  | SubscrExpr
 //  | AtomExpr
 func (p *Parser) parsePrimary() (ast.Expr, bool) {
 	call, ok := p.parseCallExpr()
@@ -337,10 +354,6 @@ func (p *Parser) parsePrimary() (ast.Expr, bool) {
 	attr, ok := p.parseAttrExpr()
 	if ok {
 		return attr, true
-	}
-	subscr, ok := p.parseSubscrExpr()
-	if ok {
-		return subscr, true
 	}
 	atom, ok := p.parseAtomExpr()
 	if ok {
@@ -396,13 +409,10 @@ func (p *Parser) parseAttrExpr() (*ast.CallExpr, bool) {
 	return nil, false
 }
 
-func (p *Parser) parseSubscrExpr() (*ast.CallExpr, bool) {
-	// TODO: not implemented
-	return nil, false
-}
-
 // AtomExpr ->
 //   | IfExpr
+//   | ForExpr
+//   | FnDefExpr
 //   | BasicLit
 //   | Identifier
 //   | Enclosure
@@ -430,6 +440,10 @@ func (p *Parser) parseAtomExpr() (ast.Expr, bool) {
 	par, ok := p.parseParenthExpr()
 	if ok {
 		return par, true
+	}
+	brk, ok := p.parseBracketExpr()
+	if ok {
+		return brk, true
 	}
 	return nil, false
 }
@@ -650,4 +664,47 @@ func (p *Parser) parseParenthExpr() (ast.Expr, bool) {
 	p.tokens.popEolSignificance()
 	p.tokens.commit()
 	return &ast.ParenthExpr{inner, left.Pos}, true
+}
+
+func (p *Parser) parseBracketExpr() (ast.Expr, bool) {
+	elems, pos, ok := p.parseEnclosure(lexer.LBRACKET, lexer.RBRACKET, lexer.COMMA)
+	if !ok {
+		return nil, false
+	}
+	return &ast.ListExpr{elems, pos}, true
+}
+
+// parse a set of pipeExprs in an enclosure, eg [1, 2]
+func (p *Parser) parseEnclosure(begin, end, sep lexer.Token) ([]ast.Expr, lexer.Position, bool) {
+	p.tokens.begin()
+
+	beg, ok := p.tokens.expectGet(begin)
+	if !ok {
+		p.tokens.rollback()
+		return nil, lexer.Position{}, false
+	}
+
+	elems := []ast.Expr{}
+
+	// Eols dont matter in enclosure
+	p.tokens.beginEolSignificance(false)
+	for true {
+		elem, ok := p.parsePipeExpr()
+		if !ok {
+			break
+		}
+		elems = append(elems, elem)
+		if !p.tokens.expect(sep) {
+			break
+		}
+	}
+	p.tokens.popEolSignificance()
+
+	if !p.tokens.expect(end) {
+		p.tokens.rollback()
+		return nil, lexer.Position{}, false
+	}
+
+	p.tokens.commit()
+	return elems, beg.Pos, true
 }

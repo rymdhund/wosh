@@ -41,6 +41,23 @@ func TestEvalAssign2(t *testing.T) {
 	}
 }
 
+func TestEvalList(t *testing.T) {
+	r := runner(t, "a = []\nc = [1, 2] \nb = c[0]")
+	r.Run()
+	o, _ := r.baseEnv.get("a")
+	if !Equal(o, ListNil()) {
+		t.Errorf("Expected list(), got %v", o)
+	}
+	o, _ = r.baseEnv.get("c")
+	if !Equal(o, ListVal(IntVal(1), ListVal(IntVal(2), ListNil()))) {
+		t.Errorf("Expected [1, 2], got %v", o)
+	}
+	o, _ = r.baseEnv.get("b")
+	if !Equal(o, IntVal(1)) {
+		t.Errorf("Expected 1, got %v", o)
+	}
+}
+
 func TestEvalMany(t *testing.T) {
 	tests := []struct {
 		string

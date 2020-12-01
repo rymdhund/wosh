@@ -59,6 +59,15 @@ func TestEvalList(t *testing.T) {
 	}
 }
 
+func TestTrailingCommaInList(t *testing.T) {
+	r := runner(t, "a = [\n1,\n2,\n]")
+	r.Run()
+	o, _ := r.baseEnv.get("a")
+	if !Equal(o, ListVal(IntVal(1), ListVal(IntVal(2), ListNil()))) {
+		t.Errorf("Expected [1, 2], got %v", o)
+	}
+}
+
 func TestEvalMany(t *testing.T) {
 	tests := []struct {
 		string

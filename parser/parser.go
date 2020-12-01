@@ -738,13 +738,14 @@ func (p *Parser) parseEnclosure(begin, end, sep lexer.Token) ([]ast.Expr, lexer.
 			break
 		}
 	}
-	p.tokens.popEolSignificance()
 
 	if !p.tokens.expect(end) {
+		p.tokens.popEolSignificance()
 		p.tokens.rollback()
 		return nil, lexer.Position{}, false
 	}
 
+	p.tokens.popEolSignificance()
 	p.tokens.commit()
 	return elems, beg.Pos, true
 }

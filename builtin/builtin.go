@@ -79,16 +79,25 @@ func Str(o Object) *StringObject {
 }
 
 func Get(o Object, idx Object) (Object, bool) {
-	lst, ok := o.(*ListObject)
-	if !ok {
-		panic("trying to get() on non-list")
-	}
-
 	i, ok := idx.(*IntObject)
 	if !ok {
-		panic("trying to get() non-integer index")
+		panic("Trying to get() non-integer index")
 	}
-	return lst.Get(i.Val)
+
+	lst, ok := o.(*ListObject)
+	if ok {
+		return lst.Get(i.Val)
+	}
+	str, ok := o.(*StringObject)
+	if ok {
+		if i.Val >= len(str.Val) || i.Val < 0 {
+			return UnitVal, false
+		}
+		c := string(str.Val[i.Val])
+		return StrVal(c), true
+	}
+	panic("Trying to get() on non-compatible object")
+
 }
 
 func Eq(o1, o2 Object) Object {
@@ -97,4 +106,56 @@ func Eq(o1, o2 Object) Object {
 
 func Neq(o1, o2 Object) Object {
 	return BoolVal(!o1.Eq(o2))
+}
+
+func LessEq(o1, o2 Object) Object {
+	switch t1 := o1.(type) {
+	case *IntObject:
+		i2, ok := o2.(*IntObject)
+		if !ok {
+			panic(fmt.Sprintf("trying to compare %s and %s", t1.Type(), o2.Type()))
+		}
+		return BoolVal(t1.Val <= i2.Val)
+	default:
+		panic(fmt.Sprintf("Trying to compare %s and %s", t1.Type(), o2.Type()))
+	}
+}
+
+func Less(o1, o2 Object) Object {
+	switch t1 := o1.(type) {
+	case *IntObject:
+		i2, ok := o2.(*IntObject)
+		if !ok {
+			panic(fmt.Sprintf("trying to compare %s and %s", t1.Type(), o2.Type()))
+		}
+		return BoolVal(t1.Val < i2.Val)
+	default:
+		panic(fmt.Sprintf("Trying to compare %s and %s", t1.Type(), o2.Type()))
+	}
+}
+
+func Greater(o1, o2 Object) Object {
+	switch t1 := o1.(type) {
+	case *IntObject:
+		i2, ok := o2.(*IntObject)
+		if !ok {
+			panic(fmt.Sprintf("trying to compare %s and %s", t1.Type(), o2.Type()))
+		}
+		return BoolVal(t1.Val > i2.Val)
+	default:
+		panic(fmt.Sprintf("Trying to compare %s and %s", t1.Type(), o2.Type()))
+	}
+}
+
+func GreaterEq(o1, o2 Object) Object {
+	switch t1 := o1.(type) {
+	case *IntObject:
+		i2, ok := o2.(*IntObject)
+		if !ok {
+			panic(fmt.Sprintf("trying to compare %s and %s", t1.Type(), o2.Type()))
+		}
+		return BoolVal(t1.Val >= i2.Val)
+	default:
+		panic(fmt.Sprintf("Trying to compare %s and %s", t1.Type(), o2.Type()))
+	}
 }

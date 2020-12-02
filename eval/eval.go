@@ -155,6 +155,14 @@ func (runner *Runner) RunOpExpr(env *Env, op *ast.OpExpr) (Object, Exception) {
 		return builtin.Eq(o1, o2), NoExnVal
 	case "!=":
 		return builtin.Neq(o1, o2), NoExnVal
+	case "<=":
+		return builtin.LessEq(o1, o2), NoExnVal
+	case "<":
+		return builtin.Less(o1, o2), NoExnVal
+	case ">=":
+		return builtin.GreaterEq(o1, o2), NoExnVal
+	case ">":
+		return builtin.Greater(o1, o2), NoExnVal
 	default:
 		panic(fmt.Sprintf("Not implement operator '%s'", op.Op))
 	}

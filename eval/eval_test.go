@@ -92,6 +92,7 @@ func TestEvalMany(t *testing.T) {
 		{"res = 1 != 0", BoolVal(true)},
 		{"res = 'abc' + 'def'", StrVal("abcdef")},
 		{"res = 'one' + str(1)", StrVal("one1")},
+		{"res = 'åäö'[1]", StrVal("ä")},
 		{"res = len('abc')", IntVal(3)},
 		{"res = len('åäö')", IntVal(3)},
 		{"res = len([1, 2, 3])", IntVal(3)},

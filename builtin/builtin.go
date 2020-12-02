@@ -3,6 +3,7 @@ package builtin
 import (
 	"fmt"
 	"strconv"
+	"unicode/utf8"
 
 	. "github.com/rymdhund/wosh/obj"
 )
@@ -90,10 +91,11 @@ func Get(o Object, idx Object) (Object, bool) {
 	}
 	str, ok := o.(*StringObject)
 	if ok {
-		if i.Val >= len(str.Val) || i.Val < 0 {
+		runes := []rune(str.Val)
+		if i.Val >= len(runes) || i.Val < 0 {
 			return UnitVal, false
 		}
-		c := string(str.Val[i.Val])
+		c := string(runes[i.Val])
 		return StrVal(c), true
 	}
 	panic("Trying to get() on non-compatible object")
@@ -157,5 +159,16 @@ func GreaterEq(o1, o2 Object) Object {
 		return BoolVal(t1.Val >= i2.Val)
 	default:
 		panic(fmt.Sprintf("Trying to compare %s and %s", t1.Type(), o2.Type()))
+	}
+}
+
+func Len(o Object) Object {
+	switch t := o.(type) {
+	case *StringObject:
+		return IntVal(utf8.RuneCountInString(t.Val))
+	case *ListObject:
+		return IntVal(t.Len())
+	default:
+		panic(fmt.Sprintf("Trying to get length of %s", o.Type()))
 	}
 }

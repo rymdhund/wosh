@@ -299,6 +299,16 @@ func (runner *Runner) RunCallExpr(env *Env, call *ast.CallExpr) (Object, Excepti
 		}
 		s := builtin.Str(param)
 		return s, NoExnVal
+	case "len":
+		if len(call.Args) != 1 {
+			panic("Expected 1 argument to len()")
+		}
+		param, exn := runner.RunExpr(env, call.Args[0])
+		if exn != NoExnVal {
+			return UnitVal, exn
+		}
+		s := builtin.Len(param)
+		return s, NoExnVal
 	default:
 		o, exn := runner.RunIdentExpr(env, call.Ident)
 		if exn != NoExnVal {

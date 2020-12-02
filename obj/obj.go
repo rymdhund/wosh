@@ -234,6 +234,18 @@ func (t *ListObject) Add(o Object) {
 	cur.next = e
 }
 
+func (t *ListObject) Len() int {
+	cnt := 0
+
+	cur := t.head
+	for cur != nil {
+		cnt += 1
+		cur = cur.next
+	}
+
+	return cnt
+}
+
 type FunctionObject struct {
 	Expr *ast.FuncExpr
 }

@@ -119,6 +119,51 @@ func TestEvalMany(t *testing.T) {
 	}
 }
 
+func TestBool(t *testing.T) {
+	tests := []struct {
+		string
+		Object
+	}{
+		{"res = true", BoolVal(true)},
+		{"res = false", BoolVal(false)},
+		{"res = 1 > 0", BoolVal(true)},
+		{"res = 1 < 0", BoolVal(false)},
+		{"res = true && true", BoolVal(true)},
+		{"res = true && false", BoolVal(false)},
+		{"res = true || false", BoolVal(true)},
+		{"res = false || false", BoolVal(false)},
+	}
+	for _, test := range tests {
+		prog, expected := test.string, test.Object
+		r := runner(t, prog)
+		r.Run()
+		res, _ := r.baseEnv.get("res")
+		if !Equal(res, expected) {
+			t.Errorf("Got %s, expected %s", res, expected)
+		}
+	}
+}
+
+func TestList(t *testing.T) {
+	tests := []struct {
+		string
+		Object
+	}{
+		{"res = [[1],[2]][0][0]", IntVal(1)},
+		{"res = [0, 1, 2][2]", IntVal(2)},
+		{"res = len([0, 1, 2])", IntVal(3)},
+	}
+	for _, test := range tests {
+		prog, expected := test.string, test.Object
+		r := runner(t, prog)
+		r.Run()
+		res, _ := r.baseEnv.get("res")
+		if !Equal(res, expected) {
+			t.Errorf("Got %s, expected %s", res, expected)
+		}
+	}
+}
+
 func TestEvalError(t *testing.T) {
 	tests := []struct {
 		prog string

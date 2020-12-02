@@ -153,7 +153,7 @@ func (l *Lexer) LexTokenItem() TokenItem {
 		// two letter lookahead
 		r2 := l.peekn(2)
 		switch r2 {
-		case "==", "!=", ">=", "<=":
+		case "==", "!=", ">=", "<=", "&&", "||":
 			l.popn(2)
 			l.step(2)
 			return TokenItem{OP, r2, l.pos}

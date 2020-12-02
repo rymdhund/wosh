@@ -163,6 +163,10 @@ func (runner *Runner) RunOpExpr(env *Env, op *ast.OpExpr) (Object, Exception) {
 		return builtin.GreaterEq(o1, o2), NoExnVal
 	case ">":
 		return builtin.Greater(o1, o2), NoExnVal
+	case "&&":
+		return builtin.BoolAnd(o1, o2), NoExnVal
+	case "||":
+		return builtin.BoolOr(o1, o2), NoExnVal
 	default:
 		panic(fmt.Sprintf("Not implement operator '%s'", op.Op))
 	}

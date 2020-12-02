@@ -209,7 +209,7 @@ func (p *Parser) parseAssignExpr() (ast.Expr, bool) {
 func (p *Parser) parsePipeExpr() (ast.Expr, bool) {
 	p.tokens.begin()
 
-	left, ok := p.parseCompExpr() // TODO: make this redirect expr
+	left, ok := p.parseOrExpr() // TODO: make this redirect expr
 	if !ok {
 		p.tokens.rollback()
 		return nil, false
@@ -237,104 +237,34 @@ func (p *Parser) parsePipeExpr() (ast.Expr, bool) {
 	return left, true
 }
 
+// OrExpr ->
+//   | AndExpr ('||' AndExpr)*
+func (p *Parser) parseOrExpr() (ast.Expr, bool) {
+	return p.parseBinaryOpExpr([]string{"||"}, p.parseAndExpr)
+}
+
+// AndExpr ->
+//   | CompExpr ('||' CompExpr)*
+func (p *Parser) parseAndExpr() (ast.Expr, bool) {
+	return p.parseBinaryOpExpr([]string{"&&"}, p.parseCompExpr)
+}
+
 // CompExpr ->
 //   | AddExpr (<comp-op> AddExpr)*
 func (p *Parser) parseCompExpr() (ast.Expr, bool) {
-	p.tokens.begin()
-
-	expr, ok := p.parseAddExpr()
-	if !ok {
-		p.tokens.rollback()
-		return nil, false
-	}
-
-	for true {
-		op := p.tokens.peek()
-		if op.Tok == lexer.OP && (op.Lit == "==" || op.Lit == "!=" || op.Lit == ">=" || op.Lit == "<=" || op.Lit == ">" || op.Lit == "<") {
-			p.tokens.pop()
-			right, ok := p.parseAddExpr()
-			if ok {
-				expr = &ast.OpExpr{expr, right, op.Lit}
-			} else {
-				// Continue parsing anyway
-				p.error(fmt.Sprintf("Expected an expression after this '%s'", op.Lit), op.Pos)
-				p.tokens.commit()
-				return &ast.Bad{op.Pos}, true
-			}
-		} else {
-			p.tokens.commit()
-			return expr, true
-		}
-	}
-	panic("unreachable")
+	return p.parseBinaryOpExpr([]string{"==", "!=", ">=", "<=", ">", "<"}, p.parseAddExpr)
 }
 
 // AddExpr ->
 //   | MultExpr (<add_op> MultExpr)*
 func (p *Parser) parseAddExpr() (ast.Expr, bool) {
-	p.tokens.begin()
-
-	expr, ok := p.parseMultExpr()
-	if !ok {
-		p.tokens.rollback()
-		return nil, false
-	}
-
-	for true {
-		op, ok := p.tokens.expectGetOp("+")
-		if !ok {
-			op, ok = p.tokens.expectGetOp("-")
-		}
-		if ok {
-			right, ok := p.parseMultExpr()
-			if ok {
-				expr = &ast.OpExpr{expr, right, op.Lit}
-			} else {
-				// Continue parsing anyway
-				p.error(fmt.Sprintf("Expected an expression after this '%s'", op.Lit), op.Pos)
-				p.tokens.commit()
-				return &ast.Bad{op.Pos}, true
-			}
-		} else {
-			p.tokens.commit()
-			return expr, true
-		}
-	}
-	panic("unreachable")
+	return p.parseBinaryOpExpr([]string{"+", "-"}, p.parseMultExpr)
 }
 
 // MultExpr ->
-//   | UnaryExpr (<mult_op> MultExpr)
+//   | UnaryExpr (<mult_op> UnaryExpr)*
 func (p *Parser) parseMultExpr() (ast.Expr, bool) {
-	p.tokens.begin()
-
-	expr, ok := p.parseUnaryExpr()
-	if !ok {
-		p.tokens.rollback()
-		return nil, false
-	}
-
-	for true {
-		op, ok := p.tokens.expectGetOp("*")
-		if !ok {
-			op, ok = p.tokens.expectGetOp("/")
-		}
-		if ok {
-			right, ok := p.parseUnaryExpr()
-			if ok {
-				expr = &ast.OpExpr{expr, right, op.Lit}
-			} else {
-				// Continue parsing anyway
-				p.error(fmt.Sprintf("Expected an expression after this '%s'", op.Lit), op.Pos)
-				p.tokens.commit()
-				return &ast.Bad{op.Pos}, true
-			}
-		} else {
-			p.tokens.commit()
-			return expr, true
-		}
-	}
-	panic("unreachable")
+	return p.parseBinaryOpExpr([]string{"*", "/"}, p.parseUnaryExpr)
 }
 
 // UnaryExpr ->
@@ -363,19 +293,21 @@ func (p *Parser) parseUnaryExpr() (ast.Expr, bool) {
 // SubscrExpr ->
 //  | PrimaryExpr [ SubscrExpr ]
 func (p *Parser) parseSubscrExpr() (ast.Expr, bool) {
-	prim, ok := p.parsePrimary()
+	expr, ok := p.parsePrimary()
 	if !ok {
-		return prim, ok
+		return expr, ok
 	}
 
-	elems, _, ok := p.parseEnclosure(lexer.LBRACKET, lexer.RBRACKET, lexer.COLON)
-	if !ok {
-		return prim, true
+	for true {
+		elems, _, ok := p.parseEnclosure(lexer.LBRACKET, lexer.RBRACKET, lexer.COLON)
+		if !ok {
+			break
+		}
+		// TODO: check number of elems!
+		expr = &ast.SubscrExpr{expr, elems}
 	}
 
-	// TODO: check number of elems!
-
-	return &ast.SubscrExpr{prim, elems}, true
+	return expr, true
 }
 
 // PrimaryExpr := f
@@ -748,4 +680,42 @@ func (p *Parser) parseEnclosure(begin, end, sep lexer.Token) ([]ast.Expr, lexer.
 	p.tokens.popEolSignificance()
 	p.tokens.commit()
 	return elems, beg.Pos, true
+}
+
+func (p *Parser) parseBinaryOpExpr(operators []string, subParser func() (ast.Expr, bool)) (ast.Expr, bool) {
+	p.tokens.begin()
+
+	expr, ok := subParser()
+	if !ok {
+		p.tokens.rollback()
+		return nil, false
+	}
+
+	for true {
+		op := p.tokens.peek()
+		litMatch := false
+		for _, oper := range operators {
+			if op.Lit == oper {
+				litMatch = true
+			}
+
+		}
+
+		if op.Tok == lexer.OP && litMatch {
+			p.tokens.pop()
+			right, ok := subParser()
+			if ok {
+				expr = &ast.OpExpr{expr, right, op.Lit}
+			} else {
+				// Continue parsing anyway
+				p.error(fmt.Sprintf("Expected an expression after this '%s'", op.Lit), op.Pos)
+				p.tokens.commit()
+				return &ast.Bad{op.Pos}, true
+			}
+		} else {
+			p.tokens.commit()
+			return expr, true
+		}
+	}
+	panic("unreachable")
 }

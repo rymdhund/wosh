@@ -172,3 +172,27 @@ func Len(o Object) Object {
 		panic(fmt.Sprintf("Trying to get length of %s", o.Type()))
 	}
 }
+
+func BoolAnd(o1, o2 Object) Object {
+	b1, ok := o1.(*BoolObject)
+	if !ok {
+		panic("trying to && non-bool")
+	}
+	b2, ok := o2.(*BoolObject)
+	if !ok {
+		panic("trying to && non-bool")
+	}
+	return BoolVal(b1.Val && b2.Val)
+}
+
+func BoolOr(o1, o2 Object) Object {
+	b1, ok := o1.(*BoolObject)
+	if !ok {
+		panic("trying to || non-bool")
+	}
+	b2, ok := o2.(*BoolObject)
+	if !ok {
+		panic("trying to || non-bool")
+	}
+	return BoolVal(b1.Val || b2.Val)
+}

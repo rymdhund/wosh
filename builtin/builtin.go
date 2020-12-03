@@ -102,6 +102,38 @@ func Get(o Object, idx Object) (Object, bool) {
 
 }
 
+// idx1 and idx2 can be nil for empty indexes
+func Slice(o Object, idx1, idx2, step Object) Object {
+	i1, ok := idx1.(*IntObject)
+	if !ok {
+		if idx1 == nil {
+			i1 = IntVal(0)
+		} else {
+			panic("Trying to slice() non-integer index")
+		}
+	}
+	i2, ok := idx2.(*IntObject)
+	if !ok {
+		if idx2 == nil {
+			i2 = Len(o)
+		} else {
+			panic("Trying to slice() non-integer index")
+		}
+	}
+	istep, ok := step.(*IntObject)
+	if !ok {
+		panic("Trying to slice() non-integer index")
+	}
+
+	switch t1 := o.(type) {
+	case *ListObject:
+		return t1.Slice(i1, i2, istep)
+	default:
+		panic("Trying to slice() on non-compatible object")
+	}
+
+}
+
 func Eq(o1, o2 Object) Object {
 	return BoolVal(o1.Eq(o2))
 }
@@ -162,7 +194,7 @@ func GreaterEq(o1, o2 Object) Object {
 	}
 }
 
-func Len(o Object) Object {
+func Len(o Object) *IntObject {
 	switch t := o.(type) {
 	case *StringObject:
 		return IntVal(utf8.RuneCountInString(t.Val))

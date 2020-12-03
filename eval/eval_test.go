@@ -152,6 +152,14 @@ func TestList(t *testing.T) {
 		{"res = [[1],[2]][0][0]", IntVal(1)},
 		{"res = [0, 1, 2][2]", IntVal(2)},
 		{"res = len([0, 1, 2])", IntVal(3)},
+		{"res = [0, 1, 2, 3][1:2]", ListVal(IntVal(1), ListNil())},
+		{"res = [0, 1, 2, 3][1:2:1]", ListVal(IntVal(1), ListNil())},
+		{"res = [0, 1, 2, 3][1:0]", ListNil()},
+		{"res = [0, 1, 2, 3][-2:-1]", ListVal(IntVal(2), ListNil())},
+		{"res = [0, 1][-100:1000]", ListVal(IntVal(0), ListVal(IntVal(1), ListNil()))},
+		{"res = [0, 1, 2][1:]", ListVal(IntVal(1), ListVal(IntVal(2), ListNil()))},
+		{"res = [0, 1, 2][:2]", ListVal(IntVal(0), ListVal(IntVal(1), ListNil()))},
+		{"res = [0, 1][:]", ListVal(IntVal(0), ListVal(IntVal(1), ListNil()))},
 	}
 	for _, test := range tests {
 		prog, expected := test.string, test.Object

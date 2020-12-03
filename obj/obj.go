@@ -3,6 +3,7 @@ package obj
 import (
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/rymdhund/wosh/ast"
 )
@@ -15,6 +16,7 @@ type StackEntry struct {
 
 type Object interface {
 	Type() string
+	String() string
 	Eq(Object) bool
 }
 
@@ -169,7 +171,13 @@ func (t *ListObject) Type() string {
 }
 
 func (t *ListObject) String() string {
-	return "[]"
+	values := []string{}
+	x := t.head
+	for x != nil {
+		values = append(values, x.Val.String())
+		x = x.next
+	}
+	return "[" + strings.Join(values, ", ") + "]"
 }
 
 func (t *ListObject) Eq(o Object) bool {
@@ -246,12 +254,53 @@ func (t *ListObject) Len() int {
 	return cnt
 }
 
+func (t *ListObject) Slice(i, j, step *IntObject) *ListObject {
+	if step.Val == 0 {
+		panic("List cannot slice on step = 0")
+	}
+	if step.Val != 1 {
+		// TODO
+		panic("Not yet support for different step sizes")
+	}
+
+	length := t.Len()
+	idx1 := i.Val
+	idx2 := j.Val
+	if idx1 < 0 {
+		idx1 = length + idx1
+	}
+	if idx2 < 0 {
+		idx2 = t.Len() + idx2
+	}
+	if idx2 <= idx1 || idx1 >= length || idx2 <= 0 {
+		return ListNil()
+	}
+
+	cnt := 0
+	cur := t.head
+	for cnt < idx1 && cur != nil {
+		cur = cur.next
+		cnt++
+	}
+	list := ListNil()
+	for cnt < idx2 && cur != nil {
+		list.Add(cur.Val)
+		cur = cur.next
+		cnt++
+	}
+	return list
+}
+
 type FunctionObject struct {
 	Expr *ast.FuncExpr
 }
 
 func (f *FunctionObject) Type() string {
 	return "func"
+}
+
+func (f *FunctionObject) String() string {
+	return "<func>"
 }
 
 func (t *FunctionObject) Eq(o Object) bool {

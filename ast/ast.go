@@ -106,6 +106,14 @@ type Nop struct {
 func (t *Nop) Pos() lexer.Position { return t.TPos }
 func (t *Nop) exprType()           {}
 
+// Different from Nop in that it cant be evaluated
+type EmptyExpr struct {
+	TPos lexer.Position
+}
+
+func (t *EmptyExpr) Pos() lexer.Position { return t.TPos }
+func (t *EmptyExpr) exprType()           {}
+
 type ParenthExpr struct {
 	Inside Expr
 	TPos   lexer.Position

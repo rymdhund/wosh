@@ -299,15 +299,77 @@ func (p *Parser) parseSubscrExpr() (ast.Expr, bool) {
 	}
 
 	for true {
-		elems, _, ok := p.parseEnclosure(lexer.LBRACKET, lexer.RBRACKET, lexer.COLON)
+		// we want to be able to rollback if elems > 3 or < 0
+		p.tokens.begin()
+		elems, pos, ok := p.parseSubscrHelper()
 		if !ok {
+			p.tokens.rollback()
 			break
 		}
-		// TODO: check number of elems!
+
+		if len(elems) == 1 {
+			_, ok = elems[0].(*ast.EmptyExpr)
+			if ok {
+				p.error("wrong number of elements in subscript", pos)
+				p.tokens.rollback()
+				return nil, false
+			}
+		}
+		if len(elems) == 3 {
+			_, ok = elems[2].(*ast.EmptyExpr)
+			if ok {
+				p.error("3rd pos in subscript cannot be empty", pos)
+				p.tokens.rollback()
+				return nil, false
+			}
+		}
+
+		if len(elems) > 3 || len(elems) < 1 {
+			p.error("wrong number of elements in subscript", pos)
+			p.tokens.rollback()
+			return nil, false
+		}
+		p.tokens.commit()
 		expr = &ast.SubscrExpr{expr, elems}
 	}
 
 	return expr, true
+}
+
+func (p *Parser) parseSubscrHelper() ([]ast.Expr, lexer.Position, bool) {
+	p.tokens.begin()
+
+	beg, ok := p.tokens.expectGet(lexer.LBRACKET)
+	if !ok {
+		p.tokens.rollback()
+		return nil, lexer.Position{}, false
+	}
+
+	elems := []ast.Expr{}
+
+	// Eols dont matter in enclosure
+	p.tokens.beginEolSignificance(false)
+	for true {
+		elem, ok := p.parsePipeExpr()
+		if !ok {
+			// We also accept empty elements like xs[1:]
+			elem = &ast.EmptyExpr{p.tokens.peek().Pos}
+		}
+		elems = append(elems, elem)
+		if !p.tokens.expect(lexer.COLON) {
+			break
+		}
+	}
+
+	if !p.tokens.expect(lexer.RBRACKET) {
+		p.tokens.popEolSignificance()
+		p.tokens.rollback()
+		return nil, lexer.Position{}, false
+	}
+
+	p.tokens.popEolSignificance()
+	p.tokens.commit()
+	return elems, beg.Pos, true
 }
 
 // PrimaryExpr := f

@@ -177,6 +177,11 @@ func (l *Lexer) LexTokenItem() TokenItem {
 			t := TokenItem{COMMA, ",", l.pos}
 			l.stepLine()
 			return t
+		case ':':
+			l.pop()
+			t := TokenItem{COLON, ":", l.pos}
+			l.stepLine()
+			return t
 		case '=':
 			l.pop()
 			t := TokenItem{ASSIGN, "=", l.pos}

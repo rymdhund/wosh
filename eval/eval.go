@@ -204,21 +204,52 @@ func (runner *Runner) RunSubscrExpr(env *Env, sub *ast.SubscrExpr) (Object, Exce
 		return UnitVal, exn
 	}
 
-	if len(sub.Sub) != 1 {
-		panic("unexpected number of subscript elements")
-	}
+	if len(sub.Sub) == 1 {
+		idx, exn := runner.RunExpr(env, sub.Sub[0])
+		if exn != NoExnVal {
+			return UnitVal, exn
+		}
 
-	idx, exn := runner.RunExpr(env, sub.Sub[0])
-	if exn != NoExnVal {
-		return UnitVal, exn
-	}
+		v, ok := builtin.Get(o, idx)
+		if !ok {
+			return UnitVal, ExnVal("out of bounds", "", sub.Pos().Line)
+		}
 
-	v, ok := builtin.Get(o, idx)
-	if !ok {
-		return UnitVal, ExnVal("out of bounds", "", sub.Pos().Line)
-	}
+		return v, NoExnVal
+	} else if len(sub.Sub) == 2 || len(sub.Sub) == 3 {
+		var s1, s2, s3 Object
+		_, ok := sub.Sub[0].(*ast.EmptyExpr)
+		if ok {
+			s1 = nil
+		} else {
+			s1, exn = runner.RunExpr(env, sub.Sub[0])
+			if exn != NoExnVal {
+				return UnitVal, exn
+			}
+		}
+		_, ok = sub.Sub[1].(*ast.EmptyExpr)
+		if ok {
+			s2 = nil
+		} else {
+			s2, exn = runner.RunExpr(env, sub.Sub[1])
+			if exn != NoExnVal {
+				return UnitVal, exn
+			}
+		}
 
-	return v, NoExnVal
+		// s3 cannot be empty if it exists
+		s3 = IntVal(1)
+		if len(sub.Sub) == 3 {
+			s3, exn = runner.RunExpr(env, sub.Sub[2])
+			if exn != NoExnVal {
+				return UnitVal, exn
+			}
+		}
+
+		return builtin.Slice(o, s1, s2, s3), NoExnVal
+	} else {
+		panic("Unexpected number of elements in subscript")
+	}
 }
 
 func (runner *Runner) RunCommandExpr(env *Env, cmd *ast.CommandExpr) (Object, Exception) {

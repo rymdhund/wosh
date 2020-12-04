@@ -51,6 +51,41 @@ func (t *StringObject) Eq(o Object) bool {
 	return x.Val == t.Val
 }
 
+func (t *StringObject) Len() int {
+	return len([]rune(t.Val))
+}
+
+func (t *StringObject) Slice(i, j, step *IntObject) *StringObject {
+	if step.Val == 0 {
+		panic("Cannot slice on step = 0")
+	}
+	if step.Val != 1 {
+		// TODO
+		panic("Not yet support for different step sizes")
+	}
+
+	length := t.Len()
+	idx1 := i.Val
+	idx2 := j.Val
+	if idx1 < 0 {
+		idx1 = length + idx1
+	}
+	if idx2 < 0 {
+		idx2 = t.Len() + idx2
+	}
+	if idx2 <= idx1 || idx1 >= length || idx2 <= 0 {
+		return StrVal("")
+	}
+	if idx1 < 0 {
+		idx1 = 0
+	}
+	if idx2 > length {
+		idx2 = length
+	}
+
+	return StrVal(string([]rune(t.Val[idx1:idx2])))
+}
+
 type IntObject struct {
 	Val int
 }

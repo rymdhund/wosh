@@ -128,6 +128,8 @@ func Slice(o Object, idx1, idx2, step Object) Object {
 	switch t1 := o.(type) {
 	case *ListObject:
 		return t1.Slice(i1, i2, istep)
+	case *StringObject:
+		return t1.Slice(i1, i2, istep)
 	default:
 		panic("Trying to slice() on non-compatible object")
 	}

@@ -302,15 +302,40 @@ func (runner *Runner) RunCommandExpr(env *Env, cmd *ast.CommandExpr) (Object, Ex
 }
 
 func (runner *Runner) RunCallExpr(env *Env, call *ast.CallExpr) (Object, Exception) {
+	// Simple function
 	ident, ok := call.Lhs.(*ast.Ident)
 	if ok {
 		return runner.RunCallIdent(env, call, ident)
 	}
+
+	// method
+	attr, ok := call.Lhs.(*ast.AttrExpr)
+	if ok {
+		return runner.RunCallMethod(env, call, attr)
+	}
+
+	// first class function somehow
 	o, exn := runner.RunExpr(env, call.Lhs)
 	if exn != NoExnVal {
 		return UnitVal, exn
 	}
-	return runner.RunCallObj(env, call, o, "<anonymous function>")
+	return runner.RunCallObj(env, call, o, nil, "<anonymous function>")
+}
+
+func (runner *Runner) RunCallMethod(env *Env, call *ast.CallExpr, attr *ast.AttrExpr) (Object, Exception) {
+	// evaluate main object
+	o, exn := runner.RunExpr(env, attr.Lhs)
+	if exn != NoExnVal {
+		return UnitVal, exn
+	}
+
+	// get method
+	m := o.Class().Methods[attr.Attr.Name]
+	if m == nil {
+		return UnitVal, ExnVal("No such method", attr.Attr.Name, attr.Pos().Line)
+	}
+
+	return m, NoExnVal
 }
 
 func (runner *Runner) RunCallIdent(env *Env, call *ast.CallExpr, ident *ast.Ident) (Object, Exception) {
@@ -384,11 +409,11 @@ func (runner *Runner) RunCallIdent(env *Env, call *ast.CallExpr, ident *ast.Iden
 		if exn != NoExnVal {
 			return UnitVal, exn
 		}
-		return runner.RunCallObj(env, call, o, ident.Name)
+		return runner.RunCallObj(env, call, o, nil, ident.Name)
 	}
 }
 
-func (runner *Runner) RunCallObj(env *Env, call *ast.CallExpr, o Object, name string) (Object, Exception) {
+func (runner *Runner) RunCallObj(env *Env, call *ast.CallExpr, o Object, classArg Object, name string) (Object, Exception) {
 	f, ok := o.(*FunctionObject)
 	if !ok {
 		panic("cannot call non-function")
@@ -403,6 +428,11 @@ func (runner *Runner) RunCallObj(env *Env, call *ast.CallExpr, o Object, name st
 			len(f.Expr.Params),
 			len(call.Args),
 		)
+	}
+
+	// Add class arg for methods
+	if classArg != nil && f.Expr.ClassParam != nil {
+		innerEnv.put(f.Expr.ClassParam.Name.Name, classArg)
 	}
 
 	for i, arg := range call.Args {

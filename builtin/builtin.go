@@ -13,17 +13,17 @@ func Add(o1, o2 Object) Object {
 	case *IntObject:
 		i2, ok := o2.(*IntObject)
 		if !ok {
-			panic(fmt.Sprintf("trying to add %s and %s", t1.Type(), o2.Type()))
+			panic(fmt.Sprintf("trying to add %s and %s", t1.Class().Name, o2.Class().Name))
 		}
 		return IntVal(t1.Val + i2.Val)
 	case *StringObject:
 		i2, ok := o2.(*StringObject)
 		if !ok {
-			panic(fmt.Sprintf("trying to add %s and %s", t1.Type(), o2.Type()))
+			panic(fmt.Sprintf("trying to add %s and %s", t1.Class().Name, o2.Class().Name))
 		}
 		return StrVal(t1.Val + i2.Val)
 	default:
-		panic(fmt.Sprintf("trying to add %s and %s", t1.Type(), o2.Type()))
+		panic(fmt.Sprintf("trying to add %s and %s", t1.Class().Name, o2.Class().Name))
 	}
 }
 
@@ -149,11 +149,11 @@ func LessEq(o1, o2 Object) Object {
 	case *IntObject:
 		i2, ok := o2.(*IntObject)
 		if !ok {
-			panic(fmt.Sprintf("trying to compare %s and %s", t1.Type(), o2.Type()))
+			panic(fmt.Sprintf("trying to compare %s and %s", t1.Class().Name, o2.Class().Name))
 		}
 		return BoolVal(t1.Val <= i2.Val)
 	default:
-		panic(fmt.Sprintf("Trying to compare %s and %s", t1.Type(), o2.Type()))
+		panic(fmt.Sprintf("Trying to compare %s and %s", t1.Class().Name, o2.Class().Name))
 	}
 }
 
@@ -162,11 +162,11 @@ func Less(o1, o2 Object) Object {
 	case *IntObject:
 		i2, ok := o2.(*IntObject)
 		if !ok {
-			panic(fmt.Sprintf("trying to compare %s and %s", t1.Type(), o2.Type()))
+			panic(fmt.Sprintf("trying to compare %s and %s", t1.Class().Name, o2.Class().Name))
 		}
 		return BoolVal(t1.Val < i2.Val)
 	default:
-		panic(fmt.Sprintf("Trying to compare %s and %s", t1.Type(), o2.Type()))
+		panic(fmt.Sprintf("Trying to compare %s and %s", t1.Class().Name, o2.Class().Name))
 	}
 }
 
@@ -175,11 +175,11 @@ func Greater(o1, o2 Object) Object {
 	case *IntObject:
 		i2, ok := o2.(*IntObject)
 		if !ok {
-			panic(fmt.Sprintf("trying to compare %s and %s", t1.Type(), o2.Type()))
+			panic(fmt.Sprintf("trying to compare %s and %s", t1.Class().Name, o2.Class().Name))
 		}
 		return BoolVal(t1.Val > i2.Val)
 	default:
-		panic(fmt.Sprintf("Trying to compare %s and %s", t1.Type(), o2.Type()))
+		panic(fmt.Sprintf("Trying to compare %s and %s", t1.Class().Name, o2.Class().Name))
 	}
 }
 
@@ -188,11 +188,11 @@ func GreaterEq(o1, o2 Object) Object {
 	case *IntObject:
 		i2, ok := o2.(*IntObject)
 		if !ok {
-			panic(fmt.Sprintf("trying to compare %s and %s", t1.Type(), o2.Type()))
+			panic(fmt.Sprintf("trying to compare %s and %s", t1.Class().Name, o2.Class().Name))
 		}
 		return BoolVal(t1.Val >= i2.Val)
 	default:
-		panic(fmt.Sprintf("Trying to compare %s and %s", t1.Type(), o2.Type()))
+		panic(fmt.Sprintf("Trying to compare %s and %s", t1.Class().Name, o2.Class().Name))
 	}
 }
 
@@ -203,7 +203,7 @@ func Len(o Object) *IntObject {
 	case *ListObject:
 		return IntVal(t.Len())
 	default:
-		panic(fmt.Sprintf("Trying to get length of %s", o.Type()))
+		panic(fmt.Sprintf("Trying to get length of %s", o.Class().Name))
 	}
 }
 

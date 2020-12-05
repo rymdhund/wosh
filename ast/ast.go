@@ -39,12 +39,28 @@ func (t *Bad) Pos() lexer.Position { return t.TPos }
 func (t *Bad) exprType()           {}
 
 type CallExpr struct {
-	Ident *Ident
-	Args  []Expr
+	Lhs  Expr
+	Args []Expr
 }
 
-func (t *CallExpr) Pos() lexer.Position { return t.Ident.TPos }
+func (t *CallExpr) Pos() lexer.Position { return t.Lhs.Pos() }
 func (t *CallExpr) exprType()           {}
+
+type AttrExpr struct {
+	Lhs  Expr
+	Attr *Ident
+}
+
+func (t *AttrExpr) Pos() lexer.Position { return t.Lhs.Pos() }
+func (t *AttrExpr) exprType()           {}
+
+type SubscrExpr struct {
+	Lhs Expr
+	Sub []Expr
+}
+
+func (t *SubscrExpr) Pos() lexer.Position { return t.Lhs.Pos() }
+func (t *SubscrExpr) exprType()           {}
 
 type PipeExpr struct {
 	Left      Expr
@@ -148,14 +164,24 @@ type CommandExpr struct {
 func (t *CommandExpr) Pos() lexer.Position { return t.TPos }
 func (t *CommandExpr) exprType()           {}
 
-type FuncExpr struct {
-	Args []string
-	Body *BlockExpr
-	TPos lexer.Position
+type ParamExpr struct {
+	Name *Ident
+	Type *Ident
 }
 
-func (t *FuncExpr) Pos() lexer.Position { return t.TPos }
-func (t *FuncExpr) exprType()           {}
+func (t *ParamExpr) Pos() lexer.Position { return t.Name.Pos() }
+func (t *ParamExpr) exprType()           {}
+
+type FuncDefExpr struct {
+	Ident      *Ident
+	ClassParam *ParamExpr // might be nil
+	Params     []*ParamExpr
+	Body       *BlockExpr
+	TPos       lexer.Position
+}
+
+func (t *FuncDefExpr) Pos() lexer.Position { return t.TPos }
+func (t *FuncDefExpr) exprType()           {}
 
 type ListExpr struct {
 	Elems []Expr
@@ -164,11 +190,3 @@ type ListExpr struct {
 
 func (t *ListExpr) Pos() lexer.Position { return t.TPos }
 func (t *ListExpr) exprType()           {}
-
-type SubscrExpr struct {
-	Prim Expr
-	Sub  []Expr
-}
-
-func (t *SubscrExpr) Pos() lexer.Position { return t.Prim.Pos() }
-func (t *SubscrExpr) exprType()           {}

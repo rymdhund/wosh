@@ -58,7 +58,7 @@ import (
 // PrimaryExpr ->
 //   | AtomExpr
 //   | AttributeExpr
-//   | SubscriptExpr
+//   | SubscrExpr
 //   | CallExpr
 //
 // AtomExpr ->
@@ -284,56 +284,136 @@ func (p *Parser) parseUnaryExpr() (ast.Expr, bool) {
 			return nil, false
 		}
 	} else {
-		prim, ok := p.parseSubscrExpr()
+		prim, ok := p.parsePrimary()
 		p.tokens.commit()
 		return prim, ok
 	}
 }
 
-// SubscrExpr ->
-//  | PrimaryExpr [ SubscrExpr ]
-func (p *Parser) parseSubscrExpr() (ast.Expr, bool) {
-	expr, ok := p.parsePrimary()
+// PrimaryExpr ->
+//  | CallExpr
+//  | AttrExpr
+//  | SubscrExpr
+//  | AtomExpr
+//
+//  AtomExpr [AttrExpr | CallExpr | SubscrExpr]*
+func (p *Parser) parsePrimary() (ast.Expr, bool) {
+	expr, ok := p.parseAtomExpr()
 	if !ok {
-		return expr, ok
+		return nil, false
 	}
 
+	// Parse any combination of the trailing expressions
 	for true {
-		// we want to be able to rollback if elems > 3 or < 0
-		p.tokens.begin()
-		elems, pos, ok := p.parseSubscrHelper()
+		ident, ok := p.parseAttrExpr()
+		if ok {
+			expr = &ast.AttrExpr{expr, ident}
+			continue
+		}
+		args, ok := p.parseCallExpr()
+		if ok {
+			expr = &ast.CallExpr{expr, args}
+			continue
+		}
+		elems, ok := p.parseSubscrExpr()
+		if ok {
+			expr = &ast.SubscrExpr{expr, elems}
+			continue
+		}
+		break
+	}
+
+	return expr, true
+}
+
+func (p *Parser) parseCallExpr() ([]ast.Expr, bool) {
+	p.tokens.begin()
+
+	if !p.tokens.expect(lexer.LPAREN) {
+		p.tokens.rollback()
+		return nil, false
+	}
+
+	// Parse argument list
+	args := []ast.Expr{}
+
+	// Eols dont matter in argument list
+	p.tokens.beginEolSignificance(false)
+	for true {
+		arg, ok := p.parseMultiExpr()
 		if !ok {
-			p.tokens.rollback()
 			break
 		}
-
-		if len(elems) == 1 {
-			_, ok = elems[0].(*ast.EmptyExpr)
-			if ok {
-				p.error("wrong number of elements in subscript", pos)
-				p.tokens.rollback()
-				return nil, false
-			}
+		args = append(args, arg)
+		if !p.tokens.expect(lexer.COMMA) {
+			break
 		}
-		if len(elems) == 3 {
-			_, ok = elems[2].(*ast.EmptyExpr)
-			if ok {
-				p.error("3rd pos in subscript cannot be empty", pos)
-				p.tokens.rollback()
-				return nil, false
-			}
-		}
+	}
 
-		if len(elems) > 3 || len(elems) < 1 {
+	if !p.tokens.expect(lexer.RPAREN) {
+		p.tokens.popEolSignificance()
+		p.tokens.rollback()
+		return nil, false
+	}
+	p.tokens.popEolSignificance()
+	p.tokens.commit()
+	return args, true
+}
+
+// AttrExpr ->
+//  | .<Ident>
+func (p *Parser) parseAttrExpr() (*ast.Ident, bool) {
+	p.tokens.begin()
+
+	dot, ok := p.tokens.expectGet(lexer.PERIOD)
+	if !ok {
+		p.tokens.rollback()
+		return nil, false
+	}
+	ident, ok := p.parseIdent()
+	if !ok {
+		p.error("expected identifier", dot.Pos)
+		p.tokens.rollback()
+		return nil, false
+	}
+	p.tokens.commit()
+	return ident, true
+}
+
+// SubscrExpr
+func (p *Parser) parseSubscrExpr() ([]ast.Expr, bool) {
+	// we want to be able to rollback if elems > 3 or < 0
+	p.tokens.begin()
+	elems, pos, ok := p.parseSubscrHelper()
+	if !ok {
+		p.tokens.rollback()
+		return nil, false
+	}
+
+	if len(elems) == 1 {
+		_, ok = elems[0].(*ast.EmptyExpr)
+		if ok {
 			p.error("wrong number of elements in subscript", pos)
 			p.tokens.rollback()
 			return nil, false
 		}
-		p.tokens.commit()
-		expr = &ast.SubscrExpr{expr, elems}
+	}
+	if len(elems) == 3 {
+		_, ok = elems[2].(*ast.EmptyExpr)
+		if ok {
+			p.error("3rd pos in subscript cannot be empty", pos)
+			p.tokens.rollback()
+			return nil, false
+		}
 	}
 
-	return expr, true
+	if len(elems) > 3 || len(elems) < 1 {
+		p.error("wrong number of elements in subscript", pos)
+		p.tokens.rollback()
+		return nil, false
+	}
+	p.tokens.commit()
+	return elems, true
 }
 
 func (p *Parser) parseSubscrHelper() ([]ast.Expr, lexer.Position, bool) {
@@ -370,73 +450,6 @@ func (p *Parser) parseSubscrHelper() ([]ast.Expr, lexer.Position, bool) {
 	p.tokens.popEolSignificance()
 	p.tokens.commit()
 	return elems, beg.Pos, true
-}
-
-// PrimaryExpr := f
-//  | CallExpr
-//  | AttrExpr
-//  | AtomExpr
-func (p *Parser) parsePrimary() (ast.Expr, bool) {
-	call, ok := p.parseCallExpr()
-	if ok {
-		return call, true
-	}
-	attr, ok := p.parseAttrExpr()
-	if ok {
-		return attr, true
-	}
-	atom, ok := p.parseAtomExpr()
-	if ok {
-		return atom, true
-	}
-	return nil, false
-}
-
-func (p *Parser) parseCallExpr() (*ast.CallExpr, bool) {
-	p.tokens.begin()
-
-	item := p.tokens.pop()
-	if item.Tok != lexer.IDENT {
-		p.tokens.rollback()
-		return nil, false
-	}
-	ident := &ast.Ident{item.Pos, item.Lit}
-
-	if !p.tokens.expect(lexer.LPAREN) {
-		p.tokens.rollback()
-		return nil, false
-	}
-
-	// Parse argument list
-	args := []ast.Expr{}
-
-	// Eols dont matter in argument list
-	p.tokens.beginEolSignificance(false)
-	for true {
-		arg, ok := p.parseMultiExpr()
-		if !ok {
-			break
-		}
-		args = append(args, arg)
-		if !p.tokens.expect(lexer.COMMA) {
-			break
-		}
-	}
-
-	if !p.tokens.expect(lexer.RPAREN) {
-		p.tokens.popEolSignificance()
-		p.tokens.rollback()
-		return nil, false
-	}
-	p.tokens.popEolSignificance()
-
-	p.tokens.commit()
-	return &ast.CallExpr{ident, args}, true
-}
-
-func (p *Parser) parseAttrExpr() (*ast.CallExpr, bool) {
-	// TODO: not implemented
-	return nil, false
 }
 
 // AtomExpr ->
@@ -627,24 +640,54 @@ func (p *Parser) parseFnDefExpr() (ast.Expr, bool) {
 		return nil, false
 	}
 
+	var classParam *ast.ParamExpr = nil
+
 	ident, ok := p.parseIdent()
 	if !ok {
-		// TODO
-		panic("ParseFnDef: Not implemented ident error error case")
+		// See if we have a method definition
+		start, ok := p.tokens.expectGet(lexer.LPAREN)
+		if !ok {
+			p.error("Bad function definition", fn.Pos)
+			p.tokens.rollback()
+			return nil, false
+		}
+		p.tokens.beginEolSignificance(false)
+
+		classParam, ok = p.parseParam(true)
+		if !ok {
+			p.error("Expected class parameter", start.Pos)
+			p.tokens.popEolSignificance()
+			p.tokens.rollback()
+			return nil, false
+		}
+		ok = p.tokens.expect(lexer.RPAREN)
+		p.tokens.popEolSignificance()
+		if !ok {
+			p.error("Expected class parameter", start.Pos)
+			p.tokens.rollback()
+			return nil, false
+		}
+		ident, ok = p.parseIdent()
+		if !ok {
+			p.error("Couldn't find a method name", fn.Pos)
+			p.tokens.rollback()
+			return nil, false
+		}
 	}
 
 	if !p.tokens.expect(lexer.LPAREN) {
 		// TODO
 		panic("ParseFnDef: Not implemented")
 	}
+	p.tokens.beginEolSignificance(false)
 
-	params := []string{}
+	params := []*ast.ParamExpr{}
 	for true {
-		param, ok := p.parseIdent()
+		param, ok := p.parseParam(false)
 		if !ok {
 			break
 		}
-		params = append(params, param.Name)
+		params = append(params, param)
 		if !p.tokens.expect(lexer.COMMA) {
 			break
 		}
@@ -652,8 +695,10 @@ func (p *Parser) parseFnDefExpr() (ast.Expr, bool) {
 
 	if !p.tokens.expect(lexer.RPAREN) {
 		// TODO
+		p.tokens.popEolSignificance()
 		panic("ParseFnDef: Not implemented")
 	}
+	p.tokens.popEolSignificance()
 
 	if !p.tokens.expect(lexer.LBRACE) {
 		// TODO
@@ -668,8 +713,34 @@ func (p *Parser) parseFnDefExpr() (ast.Expr, bool) {
 	}
 	p.tokens.commit()
 
-	funcExpr := &ast.FuncExpr{params, body, fn.Pos}
-	return &ast.AssignExpr{ident, funcExpr}, true
+	return &ast.FuncDefExpr{ident, classParam, params, body, fn.Pos}, true
+}
+
+// parse "foo: Bar"
+func (p *Parser) parseParam(forceType bool) (*ast.ParamExpr, bool) {
+	p.tokens.begin()
+	param, ok := p.parseIdent()
+	if !ok {
+		p.tokens.rollback()
+		return nil, false
+	}
+	ok = p.tokens.expect(lexer.COLON)
+	if !ok {
+		if forceType {
+			p.tokens.rollback()
+			return nil, false
+		} else {
+			p.tokens.commit()
+			return &ast.ParamExpr{param, nil}, true
+		}
+	}
+	typ, ok := p.parseIdent()
+	if !ok {
+		p.tokens.rollback()
+		return nil, false
+	}
+	p.tokens.commit()
+	return &ast.ParamExpr{param, typ}, true
 }
 
 func (p *Parser) parseParenthExpr() (ast.Expr, bool) {

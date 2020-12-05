@@ -10,23 +10,34 @@ import (
 type Env struct {
 	outer       *Env
 	vars        map[string]obj.Object
+	classes     map[string]*obj.Class
 	outCaptures []string
 	errCaptures []string
 }
 
-func NewEnv() *Env {
-	return &Env{
+func NewOuterEnv() *Env {
+	e := &Env{
 		nil,
 		map[string]obj.Object{},
+		map[string]*obj.Class{},
 		[]string{},
 		[]string{},
 	}
+	e.classes[obj.UnitClass.Name] = &obj.UnitClass
+	e.classes[obj.BoolClass.Name] = &obj.BoolClass
+	e.classes[obj.IntClass.Name] = &obj.IntClass
+	e.classes[obj.StringClass.Name] = &obj.StringClass
+	e.classes[obj.ListClass.Name] = &obj.ListClass
+	e.classes[obj.FunctionClass.Name] = &obj.FunctionClass
+	e.classes[obj.ExceptionClass.Name] = &obj.ExceptionClass
+	return e
 }
 
 func NewInnerEnv(env *Env) *Env {
 	return &Env{
 		env,
 		map[string]obj.Object{},
+		map[string]*obj.Class{},
 		[]string{},
 		[]string{},
 	}

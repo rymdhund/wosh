@@ -15,9 +15,9 @@ type StackEntry struct {
 }
 
 type Object interface {
-	Type() string
 	String() string
 	Eq(Object) bool
+	Class() Class
 }
 
 type Exception interface {
@@ -35,12 +35,12 @@ type StringObject struct {
 	Val string
 }
 
-func (t *StringObject) Type() string {
-	return "str"
+func (t *StringObject) Class() Class {
+	return StringClass
 }
 
 func (t *StringObject) String() string {
-	return fmt.Sprintf("%s(%v)", t.Type(), t.Val)
+	return fmt.Sprintf("%s(%v)", t.Class().Name, t.Val)
 }
 
 func (t *StringObject) Eq(o Object) bool {
@@ -90,12 +90,12 @@ type IntObject struct {
 	Val int
 }
 
-func (t *IntObject) Type() string {
-	return "int"
+func (t *IntObject) Class() Class {
+	return IntClass
 }
 
 func (t *IntObject) String() string {
-	return fmt.Sprintf("%s(%v)", t.Type(), t.Val)
+	return fmt.Sprintf("%s(%v)", t.Class().Name, t.Val)
 }
 
 func (t *IntObject) Eq(o Object) bool {
@@ -110,12 +110,12 @@ type BoolObject struct {
 	Val bool
 }
 
-func (t *BoolObject) Type() string {
-	return "bool"
+func (t *BoolObject) Class() Class {
+	return BoolClass
 }
 
 func (t *BoolObject) String() string {
-	return fmt.Sprintf("%s(%v)", t.Type(), t.Val)
+	return fmt.Sprintf("%s(%v)", t.Class().Name, t.Val)
 }
 
 func (t *BoolObject) Eq(o Object) bool {
@@ -131,12 +131,12 @@ type ExnObject struct {
 	stack []StackEntry
 }
 
-func (t *ExnObject) Type() string {
-	return "exception"
+func (t *ExnObject) Class() Class {
+	return ExceptionClass
 }
 
 func (t *ExnObject) String() string {
-	return fmt.Sprintf("%s(%v)", t.Type(), t.Val)
+	return fmt.Sprintf("%s(%v)", t.Class().Name, t.Val)
 }
 
 func (t *ExnObject) Eq(o Object) bool {
@@ -172,15 +172,11 @@ type ExitObject struct {
 	ExitCode int
 }
 
-func (t *ExitObject) Type() string {
-	return "exit"
-}
-
 type UnitObject struct {
 }
 
-func (t *UnitObject) Type() string {
-	return "()"
+func (t *UnitObject) Class() Class {
+	return UnitClass
 }
 
 func (t *UnitObject) String() string {
@@ -201,8 +197,8 @@ type ListObject struct {
 	head *ListNode
 }
 
-func (t *ListObject) Type() string {
-	return "list"
+func (t *ListObject) Class() Class {
+	return ListClass
 }
 
 func (t *ListObject) String() string {
@@ -327,11 +323,11 @@ func (t *ListObject) Slice(i, j, step *IntObject) *ListObject {
 }
 
 type FunctionObject struct {
-	Expr *ast.FuncExpr
+	Expr *ast.FuncDefExpr
 }
 
-func (f *FunctionObject) Type() string {
-	return "func"
+func (f *FunctionObject) Class() Class {
+	return FunctionClass
 }
 
 func (f *FunctionObject) String() string {
@@ -387,7 +383,7 @@ var NoExnVal = &ExnObject{}
 func GetString(o Object) (string, error) {
 	s, ok := o.(*StringObject)
 	if !ok {
-		return "", fmt.Errorf("Trying to use value of type '%s' as string", o.Type())
+		return "", fmt.Errorf("Trying to use value of type '%s' as string", o.Class().Name)
 	}
 	return s.Val, nil
 }
@@ -395,7 +391,7 @@ func GetString(o Object) (string, error) {
 func GetBool(o Object) bool {
 	n, ok := o.(*BoolObject)
 	if !ok {
-		panic(fmt.Sprintf("Trying to use value of type '%s' as bool", o.Type()))
+		panic(fmt.Sprintf("Trying to use value of type '%s' as bool", o.Class().Name))
 	}
 	return n.Val
 }

@@ -21,7 +21,7 @@ type Runner struct {
 }
 
 func NewRunner(ast *ast.BlockExpr) *Runner {
-	return &Runner{NewEnv(), ast}
+	return &Runner{NewOuterEnv(), ast}
 }
 
 func (runner *Runner) Run() error {
@@ -64,6 +64,8 @@ func (runner *Runner) RunExpr(env *Env, exp ast.Expr) (Object, Exception) {
 		return runner.RunListExpr(env, v)
 	case *ast.SubscrExpr:
 		return runner.RunSubscrExpr(env, v)
+	case *ast.AttrExpr:
+		return runner.RunAttrExpr(env, v)
 	case *ast.IfExpr:
 		cond, exn := runner.RunExpr(env, v.Cond)
 		if exn != NoExnVal {
@@ -125,9 +127,18 @@ func (runner *Runner) RunExpr(env *Env, exp ast.Expr) (Object, Exception) {
 		return runner.RunExpr(env, v.Inside)
 	case *ast.CommandExpr:
 		return runner.RunCommandExpr(env, v)
-	case *ast.FuncExpr:
+	case *ast.FuncDefExpr:
 		fnObj := FunctionObject{v}
-		return &fnObj, NoExnVal
+		if v.ClassParam != nil {
+			class := env.classes[v.ClassParam.Type.Name]
+			if class == nil {
+				panic("Couldn't find class")
+			}
+			class.Methods[v.Ident.Name] = &fnObj
+		} else {
+			env.put(v.Ident.Name, &fnObj)
+		}
+		return UnitVal, NoExnVal
 	default:
 		panic(fmt.Sprintf("Not implemented expression in runner: %+v", exp))
 	}
@@ -199,7 +210,7 @@ func (runner *Runner) RunListExpr(env *Env, lst *ast.ListExpr) (Object, Exceptio
 }
 
 func (runner *Runner) RunSubscrExpr(env *Env, sub *ast.SubscrExpr) (Object, Exception) {
-	o, exn := runner.RunExpr(env, sub.Prim)
+	o, exn := runner.RunExpr(env, sub.Lhs)
 	if exn != NoExnVal {
 		return UnitVal, exn
 	}
@@ -252,6 +263,18 @@ func (runner *Runner) RunSubscrExpr(env *Env, sub *ast.SubscrExpr) (Object, Exce
 	}
 }
 
+func (runner *Runner) RunAttrExpr(env *Env, sub *ast.AttrExpr) (Object, Exception) {
+	o, exn := runner.RunExpr(env, sub.Lhs)
+	if exn != NoExnVal {
+		return UnitVal, exn
+	}
+	m := o.Class().Methods[sub.Attr.Name]
+	if m == nil {
+		return UnitVal, ExnVal("no such attribute", sub.Attr.Name, sub.Pos().Line)
+	}
+	return m, NoExnVal
+}
+
 func (runner *Runner) RunCommandExpr(env *Env, cmd *ast.CommandExpr) (Object, Exception) {
 	cmdObj := exec.Command(cmd.CmdParts[0], cmd.CmdParts[1:]...)
 
@@ -279,7 +302,19 @@ func (runner *Runner) RunCommandExpr(env *Env, cmd *ast.CommandExpr) (Object, Ex
 }
 
 func (runner *Runner) RunCallExpr(env *Env, call *ast.CallExpr) (Object, Exception) {
-	switch call.Ident.Name {
+	ident, ok := call.Lhs.(*ast.Ident)
+	if ok {
+		return runner.RunCallIdent(env, call, ident)
+	}
+	o, exn := runner.RunExpr(env, call.Lhs)
+	if exn != NoExnVal {
+		return UnitVal, exn
+	}
+	return runner.RunCallObj(env, call, o, "<anonymous function>")
+}
+
+func (runner *Runner) RunCallIdent(env *Env, call *ast.CallExpr, ident *ast.Ident) (Object, Exception) {
+	switch ident.Name {
 	case "echo":
 		if len(call.Args) != 1 {
 			panic("Expected 1 argument to echo()")
@@ -290,7 +325,7 @@ func (runner *Runner) RunCallExpr(env *Env, call *ast.CallExpr) (Object, Excepti
 		}
 		s, err := GetString(param)
 		if err != nil {
-			return UnitVal, ExnVal(err.Error(), call.Ident.Name, call.Pos().Line)
+			return UnitVal, ExnVal(err.Error(), ident.Name, call.Pos().Line)
 		}
 		env.OutPutStr(s)
 		env.OutPutStr("\n")
@@ -305,7 +340,7 @@ func (runner *Runner) RunCallExpr(env *Env, call *ast.CallExpr) (Object, Excepti
 		}
 		s, err := GetString(param)
 		if err != nil {
-			return UnitVal, ExnVal(err.Error(), call.Ident.Name, call.Pos().Line)
+			return UnitVal, ExnVal(err.Error(), ident.Name, call.Pos().Line)
 		}
 		env.ErrPutStr(s)
 		env.ErrPutStr("\n")
@@ -321,7 +356,7 @@ func (runner *Runner) RunCallExpr(env *Env, call *ast.CallExpr) (Object, Excepti
 		}
 		s, err := GetString(param)
 		if err != nil {
-			return UnitVal, ExnVal(err.Error(), call.Ident.Name, call.Pos().Line)
+			return UnitVal, ExnVal(err.Error(), ident.Name, call.Pos().Line)
 		}
 		return UnitVal, ExnVal(s, "raise", call.Pos().Line)
 	case "str":
@@ -345,39 +380,43 @@ func (runner *Runner) RunCallExpr(env *Env, call *ast.CallExpr) (Object, Excepti
 		s := builtin.Len(param)
 		return s, NoExnVal
 	default:
-		o, exn := runner.RunIdentExpr(env, call.Ident)
+		o, exn := runner.RunIdentExpr(env, ident)
 		if exn != NoExnVal {
 			return UnitVal, exn
 		}
-		f, ok := o.(*FunctionObject)
-		if !ok {
-			panic("cannot call non-function")
-		}
-
-		innerEnv := NewInnerEnv(env)
-
-		if len(f.Expr.Args) != len(call.Args) {
-			log.Panicf(
-				"Function '%s' expected %d args, got %d",
-				call.Ident.Name,
-				len(f.Expr.Args),
-				len(call.Args),
-			)
-		}
-
-		for i, arg := range call.Args {
-			param, exn := runner.RunExpr(env, arg)
-			if exn != NoExnVal {
-				return UnitVal, exn
-			}
-			innerEnv.put(f.Expr.Args[i], param)
-		}
-		res, exn := runner.RunExpr(innerEnv, f.Expr.Body)
-		if exn != NoExnVal {
-			exn.AddStackEntry(StackEntry{call.Ident.Name, call.Pos().Line})
-		}
-		return res, exn
+		return runner.RunCallObj(env, call, o, ident.Name)
 	}
+}
+
+func (runner *Runner) RunCallObj(env *Env, call *ast.CallExpr, o Object, name string) (Object, Exception) {
+	f, ok := o.(*FunctionObject)
+	if !ok {
+		panic("cannot call non-function")
+	}
+
+	innerEnv := NewInnerEnv(env)
+
+	if len(f.Expr.Params) != len(call.Args) {
+		log.Panicf(
+			"Function '%s' expected %d args, got %d",
+			name,
+			len(f.Expr.Params),
+			len(call.Args),
+		)
+	}
+
+	for i, arg := range call.Args {
+		param, exn := runner.RunExpr(env, arg)
+		if exn != NoExnVal {
+			return UnitVal, exn
+		}
+		innerEnv.put(f.Expr.Params[i].Name.Name, param)
+	}
+	res, exn := runner.RunExpr(innerEnv, f.Expr.Body)
+	if exn != NoExnVal {
+		exn.AddStackEntry(StackEntry{name, call.Pos().Line})
+	}
+	return res, exn
 }
 
 func (runner *Runner) RunIdentExpr(env *Env, ident *ast.Ident) (Object, Exception) {

@@ -16,6 +16,7 @@ const (
 	COMMAND
 	EOL
 	COMMA
+	PERIOD
 	COLON
 	OP
 	PIPE_OP
@@ -45,6 +46,7 @@ var tokens = []string{
 	COMMAND:  "COMMAND",
 	EOL:      "EOL",
 	COMMA:    ",",
+	PERIOD:   ".",
 	COLON:    ":",
 	OP:       "OP",
 	SPACE:    "SPACE",
@@ -175,6 +177,11 @@ func (l *Lexer) LexTokenItem() TokenItem {
 		case ',':
 			l.pop()
 			t := TokenItem{COMMA, ",", l.pos}
+			l.stepLine()
+			return t
+		case '.':
+			l.pop()
+			t := TokenItem{PERIOD, ".", l.pos}
 			l.stepLine()
 			return t
 		case ':':

@@ -111,7 +111,10 @@ func TestEvalMany(t *testing.T) {
 	for _, test := range tests {
 		prog, expected := test.string, test.Object
 		r := runner(t, prog)
-		r.Run()
+		err := r.Run()
+		if err != nil {
+			t.Fatal(err)
+		}
 		res, _ := r.baseEnv.get("res")
 		if !Equal(res, expected) {
 			t.Errorf("Got %s, expected %s", res, expected)
@@ -136,7 +139,10 @@ func TestBool(t *testing.T) {
 	for _, test := range tests {
 		prog, expected := test.string, test.Object
 		r := runner(t, prog)
-		r.Run()
+		err := r.Run()
+		if err != nil {
+			t.Fatal(err)
+		}
 		res, _ := r.baseEnv.get("res")
 		if !Equal(res, expected) {
 			t.Errorf("Got %s, expected %s", res, expected)
@@ -165,7 +171,31 @@ func TestList(t *testing.T) {
 	for _, test := range tests {
 		prog, expected := test.string, test.Object
 		r := runner(t, prog)
-		r.Run()
+		err := r.Run()
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, _ := r.baseEnv.get("res")
+		if !Equal(res, expected) {
+			t.Errorf("Got %s, expected %s", res, expected)
+		}
+	}
+}
+
+func TestMethod(t *testing.T) {
+	tests := []struct {
+		string
+		Object
+	}{
+		{"fn (s: Str) abc() {\n 1\n }\n res = ''.abc()", IntVal(1)},
+	}
+	for _, test := range tests {
+		prog, expected := test.string, test.Object
+		r := runner(t, prog)
+		err := r.Run()
+		if err != nil {
+			t.Fatal(err)
+		}
 		res, _ := r.baseEnv.get("res")
 		if !Equal(res, expected) {
 			t.Errorf("Got %s, expected %s", res, expected)
@@ -178,17 +208,17 @@ func TestEvalError(t *testing.T) {
 		prog string
 		exp  string
 	}{
-		{"res <-? raise('test')", "exception"},
-		{"res <-? `diff`", "exit"},
-		{"res <-? if true { raise(2) }", "exception"},
+		{"res <-? raise('test')", "Exception"},
+		{"res <-? `diff`", "Exception"},
+		{"res <-? if true { raise(2) }", "Exception"},
 	}
 	for _, test := range tests {
 		prog, expected := test.prog, test.exp
 		r := runner(t, prog)
 		r.Run()
 		res, _ := r.baseEnv.get("res")
-		if res.Type() != expected {
-			t.Errorf("Got %s, expected %s", res.Type(), expected)
+		if res.Class().Name != expected {
+			t.Errorf("Got %s, expected %s", res.Class().Name, expected)
 		}
 	}
 }

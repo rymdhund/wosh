@@ -98,7 +98,7 @@ func Get(o Object, idx Object) (Object, bool) {
 		c := string(runes[i.Val])
 		return StrVal(c), true
 	}
-	panic("Trying to get() on non-compatible object")
+	panic(fmt.Sprintf("Trying to get() on %s object", o.Class().Name))
 
 }
 
@@ -229,4 +229,21 @@ func BoolOr(o1, o2 Object) Object {
 		panic("trying to || non-bool")
 	}
 	return BoolVal(b1.Val || b2.Val)
+}
+
+func BoolNot(o Object) Object {
+	i, ok := o.(*BoolObject)
+	if !ok {
+		panic("trying to not non-bool")
+	}
+	return BoolVal(!i.Val)
+}
+
+func Cons(o1, o2 Object) Object {
+	switch t2 := o2.(type) {
+	case *ListObject:
+		return ListVal(o1, t2)
+	default:
+		panic(fmt.Sprintf("trying to cons %s and %s", o1.Class().Name, o2.Class().Name))
+	}
 }

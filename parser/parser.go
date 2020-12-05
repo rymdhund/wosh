@@ -40,7 +40,10 @@ import (
 //   | ComparisonExpr
 //
 // ComparisonExpr ->
-//   | AddExpr (<comp_op> AddExpr)*
+//   | ConsExpr (<comp_op> ConsExpr)*
+//
+// ConsExpr ->
+//   | AddExpr (<cons_op> AddExpr)*
 //
 // AddExpr ->
 //   | MultExpr (<add_op> AddExpr)*
@@ -250,9 +253,15 @@ func (p *Parser) parseAndExpr() (ast.Expr, bool) {
 }
 
 // CompExpr ->
-//   | AddExpr (<comp-op> AddExpr)*
+//   | ConsExpr (<comp-op> ConsExpr)*
 func (p *Parser) parseCompExpr() (ast.Expr, bool) {
-	return p.parseBinaryOpExpr([]string{"==", "!=", ">=", "<=", ">", "<"}, p.parseAddExpr)
+	return p.parseBinaryOpExpr([]string{"==", "!=", ">=", "<=", ">", "<"}, p.parseConsExpr)
+}
+
+// ConsExpr ->
+//   | AddExpr (<add_op> AddExpr)*
+func (p *Parser) parseConsExpr() (ast.Expr, bool) {
+	return p.parseBinaryOpExpr([]string{"::"}, p.parseAddExpr)
 }
 
 // AddExpr ->
@@ -274,6 +283,9 @@ func (p *Parser) parseUnaryExpr() (ast.Expr, bool) {
 	p.tokens.begin()
 
 	sub, ok := p.tokens.expectGetOp("-")
+	if !ok {
+		sub, ok = p.tokens.expectGetOp("!")
+	}
 	if ok {
 		right, ok := p.parseUnaryExpr()
 		if ok {
@@ -512,6 +524,16 @@ func (p *Parser) parseBasicLit() (ast.Expr, bool) {
 		item := p.tokens.pop()
 		return &ast.BasicLit{item.Pos, item.Tok, item.Lit}, true
 	}
+	if p.tokens.peekToken() == lexer.LPAREN {
+		p.tokens.begin()
+		item := p.tokens.pop()
+		ok := p.tokens.expect(lexer.RPAREN)
+		if ok {
+			p.tokens.commit()
+			return &ast.BasicLit{item.Pos, lexer.UNIT, "()"}, true
+		}
+		p.tokens.rollback()
+	}
 	if p.tokens.peekToken() == lexer.COMMAND {
 		item := p.tokens.pop()
 		content := item.Lit[1 : len(item.Lit)-1]
@@ -534,14 +556,18 @@ func (p *Parser) parseIfExpr() (ast.Expr, bool) {
 	p.tokens.beginEolSignificance(false)
 	cond, ok := p.parseMultiExpr()
 	if !ok {
-		// TODO
-		panic("not implemented ifexpr cond error case")
+		p.error(fmt.Sprintf("Expected inner expression in if expression, found %s", p.tokens.peek().Lit), p.tokens.peek().Pos)
+		p.tokens.popEolSignificance()
+		p.tokens.rollback()
+		return nil, false
 	}
 
 	_, ok = p.tokens.expectGet(lexer.LBRACE)
 	if !ok {
-		// TODO
-		panic("not implemented ifexpr '{' error case")
+		p.error(fmt.Sprintf("Expected '{' to start expression in if, found %s", p.tokens.peek().Lit), p.tokens.peek().Pos)
+		p.tokens.popEolSignificance()
+		p.tokens.rollback()
+		return nil, false
 	}
 
 	then, ok := p.parseBlockExpr()
@@ -622,8 +648,10 @@ func (p *Parser) parseForExpr() (ast.Expr, bool) {
 
 	_, ok = p.tokens.expectGet(lexer.RBRACE)
 	if !ok {
-		// TODO
-		panic("not implemented forexpr '}' error case")
+		p.error(fmt.Sprintf("Expected end of for expr, found %s", p.tokens.peek().Lit), p.tokens.peek().Pos)
+		p.tokens.popEolSignificance()
+		p.tokens.rollback()
+		return nil, false
 	}
 
 	p.tokens.popEolSignificance()
@@ -695,8 +723,10 @@ func (p *Parser) parseFnDefExpr() (ast.Expr, bool) {
 
 	if !p.tokens.expect(lexer.RPAREN) {
 		// TODO
+		p.error(fmt.Sprintf("Expected end of function, found %s", p.tokens.peek().Lit), p.tokens.peek().Pos)
 		p.tokens.popEolSignificance()
-		panic("ParseFnDef: Not implemented")
+		p.tokens.rollback()
+		return nil, false
 	}
 	p.tokens.popEolSignificance()
 
@@ -708,8 +738,9 @@ func (p *Parser) parseFnDefExpr() (ast.Expr, bool) {
 	body, ok := p.parseBlockExpr()
 
 	if !p.tokens.expect(lexer.RBRACE) {
-		// TODO
-		panic("ParseFnDef: Not implemented")
+		p.error(fmt.Sprintf("Expected end of for expr in function def, found %s", p.tokens.peek().Lit), p.tokens.peek().Pos)
+		p.tokens.rollback()
+		return nil, false
 	}
 	p.tokens.commit()
 
@@ -756,8 +787,10 @@ func (p *Parser) parseParenthExpr() (ast.Expr, bool) {
 	p.tokens.beginEolSignificance(false)
 	inner, ok := p.parseMultiExpr()
 	if !ok {
-		// TODO
-		panic("not implemented ParenthExpr inner error case")
+		p.error(fmt.Sprintf("Expected start of expression in pareth expression, found %s", p.tokens.peek().Lit), p.tokens.peek().Pos)
+		p.tokens.popEolSignificance()
+		p.tokens.rollback()
+		return nil, false
 	}
 
 	_, ok = p.tokens.expectGet(lexer.RPAREN)

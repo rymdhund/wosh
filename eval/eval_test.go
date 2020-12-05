@@ -90,6 +90,7 @@ func TestEvalMany(t *testing.T) {
 		{"res = 1 != 1", BoolVal(false)},
 		{"res = 1 == 0", BoolVal(false)},
 		{"res = 1 != 0", BoolVal(true)},
+		{"res = ()", UnitVal},
 		{"res = 'abc' + 'def'", StrVal("abcdef")},
 		{"res = 'one' + str(1)", StrVal("one1")},
 		{"res = 'åäö'[1]", StrVal("ä")},
@@ -187,7 +188,7 @@ func TestMethod(t *testing.T) {
 		string
 		Object
 	}{
-		{"fn (s: Str) abc() {\n 1\n }\n res = ''.abc()", IntVal(1)},
+		{"fn (s: Str) abc() { 1 }\n res = ''.abc()", IntVal(1)},
 	}
 	for _, test := range tests {
 		prog, expected := test.string, test.Object

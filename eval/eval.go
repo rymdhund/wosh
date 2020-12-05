@@ -178,6 +178,8 @@ func (runner *Runner) RunOpExpr(env *Env, op *ast.OpExpr) (Object, Exception) {
 		return builtin.BoolAnd(o1, o2), NoExnVal
 	case "||":
 		return builtin.BoolOr(o1, o2), NoExnVal
+	case "::":
+		return builtin.Cons(o1, o2), NoExnVal
 	default:
 		panic(fmt.Sprintf("Not implement operator '%s'", op.Op))
 	}
@@ -191,6 +193,8 @@ func (runner *Runner) RunUnaryExpr(env *Env, op *ast.UnaryExpr) (Object, Excepti
 	switch op.Op {
 	case "-":
 		return builtin.Neg(o), NoExnVal
+	case "!":
+		return builtin.BoolNot(o), NoExnVal
 	default:
 		panic(fmt.Sprintf("Not implement operator '%s'", op.Op))
 	}
@@ -330,12 +334,12 @@ func (runner *Runner) RunCallMethod(env *Env, call *ast.CallExpr, attr *ast.Attr
 	}
 
 	// get method
-	m := o.Class().Methods[attr.Attr.Name]
-	if m == nil {
+	fn := o.Class().Methods[attr.Attr.Name]
+	if fn == nil {
 		return UnitVal, ExnVal("No such method", attr.Attr.Name, attr.Pos().Line)
 	}
 
-	return m, NoExnVal
+	return runner.RunCallObj(env, call, fn, o, fmt.Sprintf("%s.%s", o.Class().Name, attr.Attr.Name))
 }
 
 func (runner *Runner) RunCallIdent(env *Env, call *ast.CallExpr, ident *ast.Ident) (Object, Exception) {
@@ -459,6 +463,8 @@ func (runner *Runner) RunIdentExpr(env *Env, ident *ast.Ident) (Object, Exceptio
 
 func objectFromBasicLit(lit *ast.BasicLit) (Object, Exception) {
 	switch lit.Kind {
+	case lexer.UNIT:
+		return UnitVal, NoExnVal
 	case lexer.INT:
 		n, err := strconv.Atoi(lit.Value)
 		if err != nil {

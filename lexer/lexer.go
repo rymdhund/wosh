@@ -10,6 +10,7 @@ const (
 	EOF = iota
 	ILLEGAL
 	IDENT
+	UNIT
 	INT
 	BOOL
 	STRING
@@ -40,6 +41,7 @@ var tokens = []string{
 	EOF:      "EOF",
 	ILLEGAL:  "ILLEGAL",
 	IDENT:    "IDENT",
+	UNIT:     "UNIT",
 	INT:      "INT",
 	BOOL:     "BOOL",
 	STRING:   "STRING",
@@ -155,7 +157,7 @@ func (l *Lexer) LexTokenItem() TokenItem {
 		// two letter lookahead
 		r2 := l.peekn(2)
 		switch r2 {
-		case "==", "!=", ">=", "<=", "&&", "||":
+		case "==", "!=", ">=", "<=", "&&", "||", "::":
 			l.popn(2)
 			l.step(2)
 			return TokenItem{OP, r2, l.pos}

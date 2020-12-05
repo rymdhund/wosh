@@ -212,7 +212,7 @@ func (runner *Runner) RunListExpr(env *Env, lst *ast.ListExpr) (Object, Exceptio
 		if exn != NoExnVal {
 			return UnitVal, exn
 		}
-		list.Add(o)
+		list.PrivPush(o)
 	}
 	return list, NoExnVal
 }

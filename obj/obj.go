@@ -259,7 +259,8 @@ func (t *ListObject) Get(idx int) (Object, bool) {
 	return nil, false
 }
 
-func (t *ListObject) Add(o Object) {
+// mutates the list! only for internal usage
+func (t *ListObject) PrivPush(o Object) {
 	e := &ListNode{Val: o, next: nil}
 	if t.head == nil {
 		t.head = e
@@ -271,6 +272,24 @@ func (t *ListObject) Add(o Object) {
 		cur = cur.next
 	}
 	cur.next = e
+}
+
+func (t *ListObject) Concat(o *ListObject) *ListObject {
+	if t.head == nil {
+		return o
+	}
+
+	copyHead := &ListNode{Val: t.head.Val, next: nil}
+	copyCur := copyHead
+
+	cur := t.head
+	for cur.next != nil {
+		cur = cur.next
+		copyCur.next = &ListNode{Val: cur.Val, next: nil}
+		copyCur = copyCur.next
+	}
+	copyCur.next = o.head
+	return &ListObject{head: copyHead}
 }
 
 func (t *ListObject) Len() int {
@@ -315,7 +334,7 @@ func (t *ListObject) Slice(i, j, step *IntObject) *ListObject {
 	}
 	list := ListNil()
 	for cnt < idx2 && cur != nil {
-		list.Add(cur.Val)
+		list.PrivPush(cur.Val)
 		cur = cur.next
 		cnt++
 	}

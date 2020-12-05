@@ -17,11 +17,17 @@ func Add(o1, o2 Object) Object {
 		}
 		return IntVal(t1.Val + i2.Val)
 	case *StringObject:
-		i2, ok := o2.(*StringObject)
+		t2, ok := o2.(*StringObject)
 		if !ok {
 			panic(fmt.Sprintf("trying to add %s and %s", t1.Class().Name, o2.Class().Name))
 		}
-		return StrVal(t1.Val + i2.Val)
+		return StrVal(t1.Val + t2.Val)
+	case *ListObject:
+		t2, ok := o2.(*ListObject)
+		if !ok {
+			panic(fmt.Sprintf("trying to add %s and %s", t1.Class().Name, o2.Class().Name))
+		}
+		return t1.Concat(t2)
 	default:
 		panic(fmt.Sprintf("trying to add %s and %s", t1.Class().Name, o2.Class().Name))
 	}

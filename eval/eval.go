@@ -116,7 +116,11 @@ func (runner *Runner) RunExpr(env *Env, exp ast.Expr) (Object, Exception) {
 			return ret, NoExnVal
 		case "?":
 			ret, exn := runner.RunExpr(env, v.Right)
-			env.put(v.Ident.Name, exn)
+			if exn != NoExnVal {
+				env.put(v.Ident.Name, exn)
+			} else {
+				env.put(v.Ident.Name, UnitVal)
+			}
 			return ret, NoExnVal
 		default:
 			panic(fmt.Sprintf("This is a bug! Invalid capture modifier: '%s'", v.Mod))
@@ -397,6 +401,16 @@ func (runner *Runner) RunCallIdent(env *Env, call *ast.CallExpr, ident *ast.Iden
 			return UnitVal, exn
 		}
 		s := builtin.Str(param)
+		return s, NoExnVal
+	case "int":
+		if len(call.Args) != 1 {
+			panic("Expected 1 argument to int()")
+		}
+		param, exn := runner.RunExpr(env, call.Args[0])
+		if exn != NoExnVal {
+			return UnitVal, exn
+		}
+		s := builtin.Int(param)
 		return s, NoExnVal
 	case "len":
 		if len(call.Args) != 1 {

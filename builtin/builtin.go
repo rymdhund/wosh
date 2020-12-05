@@ -74,9 +74,21 @@ func Neg(o Object) Object {
 func Str(o Object) *StringObject {
 	i, ok := o.(*IntObject)
 	if !ok {
-		panic("trying to str non-integer")
+		return StrVal(o.String())
 	}
 	return StrVal(strconv.Itoa(i.Val))
+}
+
+func Int(o Object) Object {
+	s, ok := o.(*StringObject)
+	if !ok {
+		panic("trying to int non-string")
+	}
+	i, err := strconv.Atoi(s.Val)
+	if err != nil {
+		return UnitVal
+	}
+	return IntVal(i)
 }
 
 func Get(o Object, idx Object) (Object, bool) {

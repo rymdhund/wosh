@@ -97,6 +97,18 @@ func Int(o Object) Object {
 	return IntVal(i)
 }
 
+func Ord(o Object) Object {
+	s, ok := o.(*StringObject)
+	if !ok {
+		panic("trying to ord non-string")
+	}
+	codes := []rune(s.Val)
+	if len(codes) != 1 {
+		panic("trying to ord string of len != 1")
+	}
+	return IntVal(int(codes[0]))
+}
+
 func Get(o Object, idx Object) (Object, bool) {
 	i, ok := idx.(*IntObject)
 	if !ok {
@@ -170,6 +182,12 @@ func LessEq(o1, o2 Object) Object {
 			panic(fmt.Sprintf("trying to compare %s and %s", t1.Class().Name, o2.Class().Name))
 		}
 		return BoolVal(t1.Val <= i2.Val)
+	case *StringObject:
+		s2, ok := o2.(*StringObject)
+		if !ok {
+			panic(fmt.Sprintf("trying to compare %s and %s", t1.Class().Name, o2.Class().Name))
+		}
+		return BoolVal(t1.Val <= s2.Val)
 	default:
 		panic(fmt.Sprintf("Trying to compare %s and %s", t1.Class().Name, o2.Class().Name))
 	}
@@ -183,6 +201,12 @@ func Less(o1, o2 Object) Object {
 			panic(fmt.Sprintf("trying to compare %s and %s", t1.Class().Name, o2.Class().Name))
 		}
 		return BoolVal(t1.Val < i2.Val)
+	case *StringObject:
+		s2, ok := o2.(*StringObject)
+		if !ok {
+			panic(fmt.Sprintf("trying to compare %s and %s", t1.Class().Name, o2.Class().Name))
+		}
+		return BoolVal(t1.Val < s2.Val)
 	default:
 		panic(fmt.Sprintf("Trying to compare %s and %s", t1.Class().Name, o2.Class().Name))
 	}
@@ -196,6 +220,12 @@ func Greater(o1, o2 Object) Object {
 			panic(fmt.Sprintf("trying to compare %s and %s", t1.Class().Name, o2.Class().Name))
 		}
 		return BoolVal(t1.Val > i2.Val)
+	case *StringObject:
+		s2, ok := o2.(*StringObject)
+		if !ok {
+			panic(fmt.Sprintf("trying to compare %s and %s", t1.Class().Name, o2.Class().Name))
+		}
+		return BoolVal(t1.Val > s2.Val)
 	default:
 		panic(fmt.Sprintf("Trying to compare %s and %s", t1.Class().Name, o2.Class().Name))
 	}
@@ -209,6 +239,12 @@ func GreaterEq(o1, o2 Object) Object {
 			panic(fmt.Sprintf("trying to compare %s and %s", t1.Class().Name, o2.Class().Name))
 		}
 		return BoolVal(t1.Val >= i2.Val)
+	case *StringObject:
+		s2, ok := o2.(*StringObject)
+		if !ok {
+			panic(fmt.Sprintf("trying to compare %s and %s", t1.Class().Name, o2.Class().Name))
+		}
+		return BoolVal(t1.Val >= s2.Val)
 	default:
 		panic(fmt.Sprintf("Trying to compare %s and %s", t1.Class().Name, o2.Class().Name))
 	}

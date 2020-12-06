@@ -412,6 +412,16 @@ func (runner *Runner) RunCallIdent(env *Env, call *ast.CallExpr, ident *ast.Iden
 		}
 		s := builtin.Int(param)
 		return s, NoExnVal
+	case "ord":
+		if len(call.Args) != 1 {
+			panic("Expected 1 argument to ord()")
+		}
+		param, exn := runner.RunExpr(env, call.Args[0])
+		if exn != NoExnVal {
+			return UnitVal, exn
+		}
+		s := builtin.Ord(param)
+		return s, NoExnVal
 	case "len":
 		if len(call.Args) != 1 {
 			panic("Expected 1 argument to len()")

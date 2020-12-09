@@ -195,6 +195,7 @@ type ListNode struct {
 
 type ListObject struct {
 	head *ListNode
+	len  int
 }
 
 func (t *ListObject) Class() Class {
@@ -261,6 +262,7 @@ func (t *ListObject) Get(idx int) (Object, bool) {
 
 // mutates the list! only for internal usage
 func (t *ListObject) PrivPush(o Object) {
+	t.len++
 	e := &ListNode{Val: o, next: nil}
 	if t.head == nil {
 		t.head = e
@@ -289,19 +291,11 @@ func (t *ListObject) Concat(o *ListObject) *ListObject {
 		copyCur = copyCur.next
 	}
 	copyCur.next = o.head
-	return &ListObject{head: copyHead}
+	return &ListObject{head: copyHead, len: t.len + o.len}
 }
 
 func (t *ListObject) Len() int {
-	cnt := 0
-
-	cur := t.head
-	for cur != nil {
-		cnt += 1
-		cur = cur.next
-	}
-
-	return cnt
+	return t.len
 }
 
 func (t *ListObject) Slice(i, j, step *IntObject) *ListObject {
@@ -390,11 +384,11 @@ func ExnVal(s string, cause string, line int) *ExnObject {
 
 func ListVal(val Object, tail *ListObject) *ListObject {
 	node := ListNode{Val: val, next: tail.head}
-	return &ListObject{head: &node}
+	return &ListObject{head: &node, len: tail.len + 1}
 }
 
 func ListNil() *ListObject {
-	return &ListObject{head: nil}
+	return &ListObject{head: nil, len: 0}
 }
 
 var NoExnVal = &ExnObject{}
@@ -439,6 +433,9 @@ func (t *MapObject) Eq(o Object) bool {
 // Returns (nil, false) in case of out of bounds error
 func (t *MapObject) Get(key string) (Object, bool) {
 	res, ok := t.Map[key]
+	if !ok {
+		return UnitVal, true
+	}
 	return res, ok
 }
 

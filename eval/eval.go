@@ -12,6 +12,7 @@ import (
 	"github.com/rymdhund/wosh/ast"
 	"github.com/rymdhund/wosh/builtin"
 	"github.com/rymdhund/wosh/lexer"
+	"github.com/rymdhund/wosh/obj"
 	. "github.com/rymdhund/wosh/obj"
 )
 
@@ -62,6 +63,8 @@ func (runner *Runner) RunExpr(env *Env, exp ast.Expr) (Object, Exception) {
 		return runner.RunUnaryExpr(env, v)
 	case *ast.ListExpr:
 		return runner.RunListExpr(env, v)
+	case *ast.MapExpr:
+		return runner.RunMapExpr(env, v)
 	case *ast.SubscrExpr:
 		return runner.RunSubscrExpr(env, v)
 	case *ast.AttrExpr:
@@ -215,6 +218,23 @@ func (runner *Runner) RunListExpr(env *Env, lst *ast.ListExpr) (Object, Exceptio
 		list.PrivPush(o)
 	}
 	return list, NoExnVal
+}
+
+func (runner *Runner) RunMapExpr(env *Env, mp *ast.MapExpr) (Object, Exception) {
+	res := NewMap()
+
+	for _, expr := range mp.Elems {
+		key, exn := objectFromBasicLit(expr.Key)
+		if exn != NoExnVal {
+			return UnitVal, exn
+		}
+		val, exn := runner.RunExpr(env, expr.Val)
+		if exn != NoExnVal {
+			return UnitVal, exn
+		}
+		builtin.Set(res, key, val)
+	}
+	return res, NoExnVal
 }
 
 func (runner *Runner) RunSubscrExpr(env *Env, sub *ast.SubscrExpr) (Object, Exception) {
@@ -432,6 +452,30 @@ func (runner *Runner) RunCallIdent(env *Env, call *ast.CallExpr, ident *ast.Iden
 		}
 		s := builtin.Len(param)
 		return s, NoExnVal
+	case "new_map":
+		if len(call.Args) != 0 {
+			panic("Expected 0 argument to new_map()")
+		}
+		m := obj.NewMap()
+		return m, NoExnVal
+	case "map_set":
+		if len(call.Args) != 3 {
+			panic("Expected 3 arguments to map_set()")
+		}
+		m, exn := runner.RunExpr(env, call.Args[0])
+		if exn != NoExnVal {
+			return UnitVal, exn
+		}
+		key, exn := runner.RunExpr(env, call.Args[1])
+		if exn != NoExnVal {
+			return UnitVal, exn
+		}
+		val, exn := runner.RunExpr(env, call.Args[2])
+		if exn != NoExnVal {
+			return UnitVal, exn
+		}
+		builtin.Set(m, key, val)
+		return UnitVal, NoExnVal
 	default:
 		o, exn := runner.RunIdentExpr(env, ident)
 		if exn != NoExnVal {

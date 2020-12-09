@@ -110,26 +110,33 @@ func Ord(o Object) Object {
 }
 
 func Get(o Object, idx Object) (Object, bool) {
-	i, ok := idx.(*IntObject)
-	if !ok {
-		panic("Trying to get() non-integer index")
-	}
-
-	lst, ok := o.(*ListObject)
-	if ok {
-		return lst.Get(i.Val)
-	}
-	str, ok := o.(*StringObject)
-	if ok {
-		runes := []rune(str.Val)
+	switch t1 := o.(type) {
+	case *ListObject:
+		i, ok := idx.(*IntObject)
+		if !ok {
+			panic("Trying to get() non-integer index")
+		}
+		return t1.Get(i.Val)
+	case *StringObject:
+		i, ok := idx.(*IntObject)
+		if !ok {
+			panic("Trying to get() non-integer index")
+		}
+		runes := []rune(t1.Val)
 		if i.Val >= len(runes) || i.Val < 0 {
 			return UnitVal, false
 		}
 		c := string(runes[i.Val])
 		return StrVal(c), true
+	case *MapObject:
+		s, ok := idx.(*StringObject)
+		if !ok {
+			panic("Trying to map.get() non-string key")
+		}
+		return t1.Get(s.Val)
+	default:
+		panic(fmt.Sprintf("Trying to get() on %s object", o.Class().Name))
 	}
-	panic(fmt.Sprintf("Trying to get() on %s object", o.Class().Name))
-
 }
 
 // idx1 and idx2 can be nil for empty indexes
@@ -256,6 +263,8 @@ func Len(o Object) *IntObject {
 		return IntVal(utf8.RuneCountInString(t.Val))
 	case *ListObject:
 		return IntVal(t.Len())
+	case *MapObject:
+		return IntVal(len(t.Map))
 	default:
 		panic(fmt.Sprintf("Trying to get length of %s", o.Class().Name))
 	}
@@ -299,5 +308,18 @@ func Cons(o1, o2 Object) Object {
 		return ListVal(o1, t2)
 	default:
 		panic(fmt.Sprintf("trying to cons %s and %s", o1.Class().Name, o2.Class().Name))
+	}
+}
+
+func Set(o, key, val Object) {
+	switch t := o.(type) {
+	case *MapObject:
+		s, ok := key.(*StringObject)
+		if !ok {
+			panic("trying to map.set() non-string key")
+		}
+		t.Map[s.Val] = val
+	default:
+		panic(fmt.Sprintf("trying to Set(%s, %s, %s)", o.Class().Name, key.Class().Name, val.Class().Name))
 	}
 }

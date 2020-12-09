@@ -185,6 +185,28 @@ func TestList(t *testing.T) {
 	}
 }
 
+func TestMap(t *testing.T) {
+	tests := []struct {
+		string
+		Object
+	}{
+		{"res = {'a': 1}['a']", IntVal(1)},
+		{"x = {}\n map_set(x, 'a', 1)\n res = x['a']", IntVal(1)},
+	}
+	for _, test := range tests {
+		prog, expected := test.string, test.Object
+		r := runner(t, prog)
+		err := r.Run()
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, _ := r.baseEnv.get("res")
+		if !Equal(res, expected) {
+			t.Errorf("Got %s, expected %s", res, expected)
+		}
+	}
+}
+
 func TestMethod(t *testing.T) {
 	tests := []struct {
 		string

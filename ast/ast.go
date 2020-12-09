@@ -190,3 +190,19 @@ type ListExpr struct {
 
 func (t *ListExpr) Pos() lexer.Position { return t.TPos }
 func (t *ListExpr) exprType()           {}
+
+type MapEntryExpr struct {
+	Key *BasicLit
+	Val Expr
+}
+
+func (t *MapEntryExpr) Pos() lexer.Position { return t.Key.Pos() }
+func (t *MapEntryExpr) exprType()           {}
+
+type MapExpr struct {
+	Elems []*MapEntryExpr
+	TPos  lexer.Position
+}
+
+func (t *MapExpr) Pos() lexer.Position { return t.TPos }
+func (t *MapExpr) exprType()           {}

@@ -12,5 +12,6 @@ var BoolClass = Class{"Bool", FunctionList{}}
 var IntClass = Class{"Int", FunctionList{}}
 var StringClass = Class{"Str", FunctionList{}}
 var ListClass = Class{"List", FunctionList{}}
+var MapClass = Class{"Map", FunctionList{}}
 var FunctionClass = Class{"Function", FunctionList{}}
 var ExceptionClass = Class{"Exception", FunctionList{}}

@@ -414,3 +414,34 @@ func GetBool(o Object) bool {
 	}
 	return n.Val
 }
+
+type MapObject struct {
+	Map map[string]Object
+}
+
+func (t *MapObject) Class() Class {
+	return MapClass
+}
+
+func (t *MapObject) String() string {
+	values := []string{}
+	for key, val := range t.Map {
+		values = append(values, fmt.Sprintf("%s: %s", key, val.String()))
+	}
+	return "{" + strings.Join(values, ", ") + "}"
+}
+
+func (t *MapObject) Eq(o Object) bool {
+	// TODO
+	return false
+}
+
+// Returns (nil, false) in case of out of bounds error
+func (t *MapObject) Get(key string) (Object, bool) {
+	res, ok := t.Map[key]
+	return res, ok
+}
+
+func NewMap() *MapObject {
+	return &MapObject{map[string]Object{}}
+}

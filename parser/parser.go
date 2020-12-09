@@ -488,6 +488,10 @@ func (p *Parser) parseAtomExpr() (ast.Expr, bool) {
 	if ok {
 		return lit, true
 	}
+	cmd, ok := p.parseCommand()
+	if ok {
+		return cmd, true
+	}
 	ident, ok := p.parseIdent()
 	if ok {
 		return ident, true
@@ -500,6 +504,10 @@ func (p *Parser) parseAtomExpr() (ast.Expr, bool) {
 	if ok {
 		return brk, true
 	}
+	brc, ok := p.parseBraceExpr()
+	if ok {
+		return brc, true
+	}
 	return nil, false
 }
 
@@ -511,20 +519,21 @@ func (p *Parser) parseIdent() (*ast.Ident, bool) {
 	return nil, false
 }
 
-func (p *Parser) parseBasicLit() (ast.Expr, bool) {
-	if p.tokens.peekToken() == lexer.INT {
+func (p *Parser) parseBasicLit() (*ast.BasicLit, bool) {
+	peek := p.tokens.peekToken()
+	if peek == lexer.INT {
 		item := p.tokens.pop()
 		return &ast.BasicLit{item.Pos, item.Tok, item.Lit}, true
 	}
-	if p.tokens.peekToken() == lexer.BOOL {
+	if peek == lexer.BOOL {
 		item := p.tokens.pop()
 		return &ast.BasicLit{item.Pos, item.Tok, item.Lit}, true
 	}
-	if p.tokens.peekToken() == lexer.STRING {
+	if peek == lexer.STRING {
 		item := p.tokens.pop()
 		return &ast.BasicLit{item.Pos, item.Tok, item.Lit}, true
 	}
-	if p.tokens.peekToken() == lexer.LPAREN {
+	if peek == lexer.LPAREN {
 		p.tokens.begin()
 		item := p.tokens.pop()
 		ok := p.tokens.expect(lexer.RPAREN)
@@ -534,6 +543,10 @@ func (p *Parser) parseBasicLit() (ast.Expr, bool) {
 		}
 		p.tokens.rollback()
 	}
+	return nil, false
+}
+
+func (p *Parser) parseCommand() (ast.Expr, bool) {
 	if p.tokens.peekToken() == lexer.COMMAND {
 		item := p.tokens.pop()
 		content := item.Lit[1 : len(item.Lit)-1]
@@ -805,15 +818,49 @@ func (p *Parser) parseParenthExpr() (ast.Expr, bool) {
 }
 
 func (p *Parser) parseBracketExpr() (ast.Expr, bool) {
-	elems, pos, ok := p.parseEnclosure(lexer.LBRACKET, lexer.RBRACKET, lexer.COMMA)
+	elems, pos, ok := p.parseEnclosure(lexer.LBRACKET, lexer.RBRACKET, lexer.COMMA, p.parsePipeExpr)
 	if !ok {
 		return nil, false
 	}
 	return &ast.ListExpr{elems, pos}, true
 }
 
+func (p *Parser) parseBraceExpr() (ast.Expr, bool) {
+	elems, pos, ok := p.parseEnclosure(lexer.LBRACE, lexer.RBRACE, lexer.COMMA, p.parseMapEntry)
+	if !ok {
+		return nil, false
+	}
+	mapEntries := []*ast.MapEntryExpr{}
+	for _, e := range elems {
+		mapEntries = append(mapEntries, e.(*ast.MapEntryExpr))
+	}
+	return &ast.MapExpr{mapEntries, pos}, true
+}
+
+func (p *Parser) parseMapEntry() (ast.Expr, bool) {
+	p.tokens.begin()
+	key, ok := p.parseBasicLit()
+	if !ok {
+		p.tokens.rollback()
+		return nil, false
+	}
+	if !p.tokens.expect(lexer.COLON) {
+		p.error("Expected colon in map literal", p.tokens.peek().Pos)
+		p.tokens.rollback()
+		return nil, false
+	}
+	val, ok := p.parsePipeExpr()
+	if !ok {
+		p.error("Expected value in map literal", p.tokens.peek().Pos)
+		p.tokens.rollback()
+		return nil, false
+	}
+	p.tokens.commit()
+	return &ast.MapEntryExpr{key, val}, true
+}
+
 // parse a set of pipeExprs in an enclosure, eg [1, 2]
-func (p *Parser) parseEnclosure(begin, end, sep lexer.Token) ([]ast.Expr, lexer.Position, bool) {
+func (p *Parser) parseEnclosure(begin, end, sep lexer.Token, subParser func() (ast.Expr, bool)) ([]ast.Expr, lexer.Position, bool) {
 	p.tokens.begin()
 
 	beg, ok := p.tokens.expectGet(begin)
@@ -827,7 +874,7 @@ func (p *Parser) parseEnclosure(begin, end, sep lexer.Token) ([]ast.Expr, lexer.
 	// Eols dont matter in enclosure
 	p.tokens.beginEolSignificance(false)
 	for true {
-		elem, ok := p.parsePipeExpr()
+		elem, ok := subParser()
 		if !ok {
 			break
 		}

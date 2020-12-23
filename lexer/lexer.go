@@ -35,37 +35,45 @@ const (
 	FN
 	COMMENT
 	FOR
+	TRY
+	HANDLE
+	DO
+	SINGLE_ARROW
 )
 
 var tokens = []string{
-	EOF:      "EOF",
-	ILLEGAL:  "ILLEGAL",
-	IDENT:    "IDENT",
-	UNIT:     "UNIT",
-	INT:      "INT",
-	BOOL:     "BOOL",
-	STRING:   "STRING",
-	COMMAND:  "COMMAND",
-	EOL:      "EOL",
-	COMMA:    ",",
-	PERIOD:   ".",
-	COLON:    ":",
-	OP:       "OP",
-	SPACE:    "SPACE",
-	ASSIGN:   "=",
-	LPAREN:   "(",
-	RPAREN:   ")",
-	LBRACE:   "{",
-	RBRACE:   "}",
-	LBRACKET: "[",
-	RBRACKET: "]",
-	PIPE_OP:  "PIPE_OP",
-	CAPTURE:  "CAPTURE",
-	IF:       "IF",
-	ELSE:     "ELSE",
-	FN:       "FN",
-	COMMENT:  "COMMENT",
-	FOR:      "FOR",
+	EOF:          "EOF",
+	ILLEGAL:      "ILLEGAL",
+	IDENT:        "IDENT",
+	UNIT:         "UNIT",
+	INT:          "INT",
+	BOOL:         "BOOL",
+	STRING:       "STRING",
+	COMMAND:      "COMMAND",
+	EOL:          "EOL",
+	COMMA:        ",",
+	PERIOD:       ".",
+	COLON:        ":",
+	OP:           "OP",
+	SPACE:        "SPACE",
+	ASSIGN:       "=",
+	LPAREN:       "(",
+	RPAREN:       ")",
+	LBRACE:       "{",
+	RBRACE:       "}",
+	LBRACKET:     "[",
+	RBRACKET:     "]",
+	PIPE_OP:      "PIPE_OP",
+	CAPTURE:      "CAPTURE",
+	IF:           "IF",
+	ELSE:         "ELSE",
+	FN:           "FN",
+	COMMENT:      "COMMENT",
+	FOR:          "FOR",
+	TRY:          "TRY",
+	HANDLE:       "HANDLE",
+	DO:           "DO",
+	SINGLE_ARROW: "->",
 }
 
 func (t Token) String() string {
@@ -167,6 +175,10 @@ func (l *Lexer) LexTokenItem() TokenItem {
 			return TokenItem{PIPE_OP, r2, l.pos}
 		case "<-":
 			return l.lexCapture()
+		case "->":
+			l.popn(2)
+			l.step(2)
+			return TokenItem{SINGLE_ARROW, r2, l.pos}
 		default:
 		}
 
@@ -346,6 +358,12 @@ func (l *Lexer) lexIdentOrKw() TokenItem {
 		return TokenItem{FN, lit, pos}
 	case "for":
 		return TokenItem{FOR, lit, pos}
+	case "try":
+		return TokenItem{TRY, lit, pos}
+	case "handle":
+		return TokenItem{HANDLE, lit, pos}
+	case "do":
+		return TokenItem{DO, lit, pos}
 	default:
 		return TokenItem{IDENT, lit, pos}
 	}

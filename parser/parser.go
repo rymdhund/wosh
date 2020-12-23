@@ -484,6 +484,14 @@ func (p *Parser) parseAtomExpr() (ast.Expr, bool) {
 	if ok {
 		return fn, true
 	}
+	tryExpr, ok := p.parseTryExpr()
+	if ok {
+		return tryExpr, true
+	}
+	doExpr, ok := p.parseDoExpr()
+	if ok {
+		return doExpr, true
+	}
 	lit, ok := p.parseBasicLit()
 	if ok {
 		return lit, true
@@ -670,6 +678,170 @@ func (p *Parser) parseForExpr() (ast.Expr, bool) {
 	p.tokens.popEolSignificance()
 	p.tokens.commit() // Commit our if
 	return &ast.ForExpr{cond, then, forTok.Pos}, true
+}
+
+func (p *Parser) parseTryExpr() (ast.Expr, bool) {
+	p.tokens.begin()
+
+	try, ok := p.tokens.expectGet(lexer.TRY)
+	if !ok {
+		p.tokens.rollback()
+		return nil, false
+	}
+
+	// ignore EOL
+	p.tokens.beginEolSignificance(false)
+
+	_, ok = p.tokens.expectGet(lexer.LBRACE)
+	if !ok {
+		p.error(fmt.Sprintf("Expected '{' after try, found %s", p.tokens.peek().Lit), p.tokens.peek().Pos)
+		p.tokens.popEolSignificance()
+		p.tokens.rollback()
+		return nil, false
+	}
+
+	then, ok := p.parseBlockExpr()
+	if !ok {
+		// TODO
+		panic("not implemented error case")
+	}
+
+	_, ok = p.tokens.expectGet(lexer.RBRACE)
+	if !ok {
+		// TODO
+		panic("not implemented error case")
+	}
+
+	ok = p.tokens.expect(lexer.HANDLE)
+	if !ok {
+		p.error(fmt.Sprintf("Expected 'handle' after 'try', found %s", p.tokens.peek().Lit), p.tokens.peek().Pos)
+		p.tokens.popEolSignificance()
+		p.tokens.rollback()
+		return nil, false
+	}
+
+	_, ok = p.tokens.expectGet(lexer.LBRACE)
+	if !ok {
+		// TODO
+		panic("not implemented else expr '{' error case")
+	}
+
+	matchCases := []*ast.MatchCaseExpr{}
+
+	for true {
+		matchCase, ok := p.parseMatchCase()
+		if !ok {
+			break
+		}
+		matchCases = append(matchCases, matchCase)
+	}
+
+	_, ok = p.tokens.expectGet(lexer.RBRACE)
+	if !ok {
+		p.error(fmt.Sprintf("Expected '}', found %s", p.tokens.peek().Lit), p.tokens.peek().Pos)
+		p.tokens.popEolSignificance()
+		p.tokens.rollback()
+		return nil, false
+	}
+
+	p.tokens.popEolSignificance()
+	p.tokens.commit()
+	return &ast.TryExpr{then, matchCases, try.Pos}, true
+}
+
+func (p *Parser) parseMatchCase() (*ast.MatchCaseExpr, bool) {
+	p.tokens.begin()
+
+	ident, ok := p.parseIdent()
+	if !ok {
+		p.tokens.rollback()
+		return nil, false
+	}
+
+	if !p.tokens.expect(lexer.LPAREN) {
+		p.error(fmt.Sprintf("Expected '(', found %s", p.tokens.peek().Lit), p.tokens.peek().Pos)
+		p.tokens.rollback()
+		return nil, false
+	}
+
+	params := []*ast.ParamExpr{}
+	for true {
+		param, ok := p.parseParam(false)
+		if !ok {
+			break
+		}
+		params = append(params, param)
+		if !p.tokens.expect(lexer.COMMA) {
+			break
+		}
+	}
+
+	if !p.tokens.expect(lexer.RPAREN) {
+		p.error(fmt.Sprintf("Expected ')', found %s", p.tokens.peek().Lit), p.tokens.peek().Pos)
+		p.tokens.rollback()
+		return nil, false
+	}
+
+	if !p.tokens.expect(lexer.SINGLE_ARROW) {
+		p.error("Expected '->'", p.tokens.peek().Pos)
+		p.tokens.rollback()
+		return nil, false
+	}
+
+	_, ok = p.tokens.expectGet(lexer.LBRACE)
+	if !ok {
+		p.error("Expected '{'", p.tokens.peek().Pos)
+		p.tokens.rollback()
+		return nil, false
+	}
+
+	block, ok := p.parseBlockExpr()
+	if !ok {
+		panic("not implemented error case")
+	}
+
+	_, ok = p.tokens.expectGet(lexer.RBRACE)
+	if !ok {
+		p.error("Expected '}'", p.tokens.peek().Pos)
+		p.tokens.rollback()
+		return nil, false
+	}
+
+	p.tokens.commit()
+	return &ast.MatchCaseExpr{
+		Pattern: &ast.PatternExpr{
+			Ident:  ident,
+			Params: params,
+		},
+		Then: block,
+	}, true
+
+}
+
+func (p *Parser) parseDoExpr() (ast.Expr, bool) {
+	p.tokens.begin()
+	do, ok := p.tokens.expectGet(lexer.DO)
+	if !ok {
+		p.tokens.rollback()
+		return nil, false
+	}
+
+	ident, ok := p.parseIdent()
+	if !ok {
+		p.error("Expected effect after 'do'", p.tokens.peek().Pos)
+		p.tokens.rollback()
+		return nil, false
+	}
+
+	args, ok := p.parseCallExpr()
+	if !ok {
+		p.error("Expected effect after 'do'", p.tokens.peek().Pos)
+		p.tokens.rollback()
+		return nil, false
+	}
+
+	p.tokens.commit()
+	return &ast.DoExpr{ident, args, do.Pos}, ok
 }
 
 func (p *Parser) parseFnDefExpr() (ast.Expr, bool) {

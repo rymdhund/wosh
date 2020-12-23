@@ -206,3 +206,39 @@ type MapExpr struct {
 
 func (t *MapExpr) Pos() lexer.Position { return t.TPos }
 func (t *MapExpr) exprType()           {}
+
+type MatchCaseExpr struct {
+	Pattern *PatternExpr
+	Then    *BlockExpr
+	TPos    lexer.Position
+}
+
+func (t *MatchCaseExpr) Pos() lexer.Position { return t.TPos }
+func (t *MatchCaseExpr) exprType()           {}
+
+// Currently only supports foo(x, y)
+type PatternExpr struct {
+	Ident  *Ident
+	Params []*ParamExpr
+}
+
+func (t *PatternExpr) Pos() lexer.Position { return t.Ident.Pos() }
+func (t *PatternExpr) exprType()           {}
+
+type TryExpr struct {
+	TryBlock    *BlockExpr
+	HandleBlock []*MatchCaseExpr
+	TPos        lexer.Position
+}
+
+func (t *TryExpr) Pos() lexer.Position { return t.TPos }
+func (t *TryExpr) exprType()           {}
+
+type DoExpr struct {
+	Ident     *Ident
+	Arguments []Expr
+	TPos      lexer.Position
+}
+
+func (t *DoExpr) Pos() lexer.Position { return t.TPos }
+func (t *DoExpr) exprType()           {}

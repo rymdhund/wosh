@@ -1,7 +1,6 @@
 package interpret
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 
@@ -13,7 +12,15 @@ type Compiler struct {
 	chunk            *Chunk
 	localLookupTable map[string]int
 	nameLookupTable  map[string]int
-	arity            int
+	heapLookupTable  map[uint8]bool // is the variable in a given slot index on the  heap?
+
+	// when creating the closure we put slot from old scope into the captures
+	outerCaptureSlots []uint8
+	// When calling the closure we put captures into the slots in the new call frame
+	innerCaptureSlots []uint8
+
+	arity     int
+	prevScope *Compiler
 }
 
 func (c *Compiler) getOrSetLocal(name string) uint8 {
@@ -29,12 +36,9 @@ func (c *Compiler) getOrSetLocal(name string) uint8 {
 	return uint8(idx)
 }
 
-func (c *Compiler) getLocalId(name string) (uint8, error) {
+func (c *Compiler) getLocalId(name string) (uint8, bool) {
 	idx, ok := c.localLookupTable[name]
-	if !ok {
-		return 0, errors.New("No such name in slots")
-	}
-	return uint8(idx), nil
+	return uint8(idx), ok
 }
 
 func (c *Compiler) getOrSetName(name string) uint8 {
@@ -51,6 +55,11 @@ func (c *Compiler) getOrSetName(name string) uint8 {
 }
 
 func compile(function *ast.FuncDefExpr) (*FunctionValue, error) {
+	return compileFunction(function, nil)
+}
+
+func compileFunction(function *ast.FuncDefExpr, prev *Compiler) (*FunctionValue, error) {
+	fmt.Printf("Compiling %s\n", function.Ident.Name)
 	arity := len(function.Params)
 	if function.ClassParam != nil {
 		arity++
@@ -59,7 +68,9 @@ func compile(function *ast.FuncDefExpr) (*FunctionValue, error) {
 		chunk:            NewChunk(),
 		localLookupTable: map[string]int{},
 		nameLookupTable:  map[string]int{},
+		heapLookupTable:  map[uint8]bool{},
 		arity:            arity,
+		prevScope:        prev,
 	}
 
 	// On idx 0 we have function
@@ -72,7 +83,21 @@ func compile(function *ast.FuncDefExpr) (*FunctionValue, error) {
 
 	c.CompileBlockExpr(function.Body)
 	c.chunk.add(OP_RETURN, 1)
-	return &FunctionValue{Name: function.Ident.Name, Arity: c.arity, Chunk: c.chunk}, nil
+
+	// find slots that should be put on heap
+	heapSlots := []uint8{}
+	for k, _ := range c.heapLookupTable {
+		heapSlots = append(heapSlots, k)
+	}
+
+	return &FunctionValue{
+		Name:             function.Ident.Name,
+		Arity:            c.arity,
+		Chunk:            c.chunk,
+		OuterCaptures:    c.outerCaptureSlots,
+		CaptureSlots:     c.innerCaptureSlots,
+		SlotsToPutOnHeap: heapSlots,
+	}, nil
 }
 
 func (c *Compiler) CompileBlockExpr(block *ast.BlockExpr) error {
@@ -92,16 +117,6 @@ func (c *Compiler) CompileBlockExpr(block *ast.BlockExpr) error {
 			}
 		}
 	}
-	return nil
-}
-
-func (c *Compiler) CompileAssignExpr(assign *ast.AssignExpr) error {
-	c.CompileExpr(assign.Right)
-	slot := c.getOrSetLocal(assign.Ident.Name)
-	c.chunk.add(OP_PUT_SLOT, assign.Pos().Line)
-	c.chunk.add(Op(slot), assign.Pos().Line)
-	c.chunk.add(OP_NIL, assign.Pos().Line)
-	// doesn't put anything on stack
 	return nil
 }
 
@@ -279,18 +294,93 @@ func (c *Compiler) CompileOpExpr(op *ast.OpExpr) error {
 	return nil
 }
 
-func (c *Compiler) CompileIdent(ident *ast.Ident) error {
-	loc, err := c.getLocalId(ident.Name)
-	if err == nil {
-		// local variable
-		c.chunk.add(OP_LOAD_SLOT, ident.Pos().Line)
-		c.chunk.add(Op(loc), ident.Pos().Line)
-	} else {
-		// global variable
-		nameIdx := c.getOrSetName(ident.Name)
-		c.chunk.add(OP_LOAD_NAME, ident.Pos().Line)
-		c.chunk.add(Op(nameIdx), ident.Pos().Line)
+func (c *Compiler) CaptureFromOuterScope(name string) (uint8, bool) {
+	outer := c.prevScope
+	// Don't capture from outmost scope since everything is global there
+	if outer == nil || outer.prevScope == nil {
+		return 0, false
 	}
+
+	outerSlot, ok := outer.getLocalId(name)
+	if ok {
+		// Move captured variables to heap
+		outer.MoveToHeap(outerSlot)
+	} else {
+		outerSlot, ok = outer.CaptureFromOuterScope(name)
+	}
+
+	if ok {
+		// We found it in some higher scope, make a local Heap variable for it
+		innerSlot := c.getOrSetLocal(name)
+		c.outerCaptureSlots = append(c.outerCaptureSlots, outerSlot)
+		c.innerCaptureSlots = append(c.innerCaptureSlots, innerSlot)
+		c.heapLookupTable[innerSlot] = true
+
+		return innerSlot, true
+	}
+
+	return 0, false
+}
+
+func (c *Compiler) CompileAssignExpr(assign *ast.AssignExpr) error {
+	c.CompileExpr(assign.Right)
+
+	fmt.Printf("compiling set %s\n", assign.Ident.Name)
+
+	slot, ok := c.getLocalId(assign.Ident.Name)
+	if ok {
+		println("existing local")
+	}
+	if !ok {
+		slot, ok = c.CaptureFromOuterScope(assign.Ident.Name)
+		if ok {
+			println("existing outer")
+		}
+	}
+
+	if !ok {
+		// make a new local variable
+		println("new local")
+		slot = c.getOrSetLocal(assign.Ident.Name)
+	}
+
+	// local variable
+	isHeap, ok := c.heapLookupTable[slot]
+	if ok && isHeap {
+		println("is heap")
+		c.chunk.add(OP_PUT_SLOT_HEAP, assign.Pos().Line)
+	} else {
+		println("is stack")
+		c.chunk.add(OP_PUT_SLOT, assign.Pos().Line)
+	}
+	c.chunk.add(Op(slot), assign.Pos().Line)
+
+	c.chunk.add(OP_NIL, assign.Pos().Line) // result is nil
+	return nil
+}
+
+func (c *Compiler) CompileIdent(ident *ast.Ident) error {
+	slot, ok := c.getLocalId(ident.Name)
+	if !ok {
+		slot, ok = c.CaptureFromOuterScope(ident.Name)
+	}
+
+	if ok {
+		// local / captured variable
+		isHeap, ok := c.heapLookupTable[slot]
+		if ok && isHeap {
+			c.chunk.add(OP_LOAD_SLOT_HEAP, ident.Pos().Line)
+		} else {
+			c.chunk.add(OP_LOAD_SLOT, ident.Pos().Line)
+		}
+		c.chunk.add(Op(slot), ident.Pos().Line)
+		return nil
+	}
+
+	// global variable
+	nameIdx := c.getOrSetName(ident.Name)
+	c.chunk.add(OP_LOAD_NAME, ident.Pos().Line)
+	c.chunk.add(Op(nameIdx), ident.Pos().Line)
 	return nil
 }
 
@@ -331,7 +421,7 @@ func (c *Compiler) CompileCallExpr(call *ast.CallExpr) error {
 }
 
 func (c *Compiler) CompileFuncDefExpr(fn *ast.FuncDefExpr) error {
-	fnValue, err := compile(fn)
+	fnValue, err := compileFunction(fn, c)
 	if err != nil {
 		return err
 	}
@@ -348,7 +438,7 @@ func (c *Compiler) CompileFuncDefExpr(fn *ast.FuncDefExpr) error {
 	} else {
 		constId := c.chunk.addConst(fnValue)
 		nameId := c.getOrSetName(fn.Ident.Name)
-		c.chunk.add(OP_LOAD_CLOSURE, fn.Pos().Line)
+		c.chunk.add(OP_MAKE_CLOSURE, fn.Pos().Line)
 		c.chunk.add(constId, fn.Pos().Line)
 		c.chunk.add(OP_PUT_GLOBAL_NAME, fn.Pos().Line)
 		c.chunk.add(Op(nameId), fn.Pos().Line)
@@ -367,4 +457,27 @@ func (c *Compiler) CompileTryExpr(try *ast.TryExpr) error {
 		}
 	*/
 	return nil
+}
+
+func (c *Compiler) MoveToHeap(slotId uint8) {
+	c.heapLookupTable[slotId] = true
+	i := 0
+	for i < len(c.chunk.Code) {
+		if c.chunk.Code[i] == OP_PUT_SLOT {
+			if uint8(c.chunk.Code[i+1]) == slotId {
+				c.chunk.Code[i] = OP_PUT_SLOT_HEAP
+			}
+		}
+		if c.chunk.Code[i] == OP_LOAD_SLOT {
+			if uint8(c.chunk.Code[i+1]) == slotId {
+				c.chunk.Code[i] = OP_LOAD_SLOT_HEAP
+			}
+		}
+		if c.chunk.Code[i].Size() <= 0 {
+			println("name")
+			println(c.chunk.Code[i].String())
+			panic("foo")
+		}
+		i += c.chunk.Code[i].Size()
+	}
 }

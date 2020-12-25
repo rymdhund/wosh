@@ -27,6 +27,7 @@ var MapType = &Type{"Map", FunctionMap{}}
 var FunctionType = &Type{"Function", FunctionMap{}}
 var ClosureType = &Type{"Closure", FunctionMap{}}
 var ExceptionType = &Type{"Exception", FunctionMap{}}
+var BoxType = &Type{"Box", FunctionMap{}}
 
 type Value interface {
 	Type() *Type
@@ -61,6 +62,14 @@ type FunctionValue struct {
 	Name  string
 	Arity int
 	Chunk *Chunk
+
+	// Slot indexes that need to be captured when creating a closure from this function
+	OuterCaptures []uint8
+
+	// The slots to put captured variables in when calling this function
+	CaptureSlots []uint8
+
+	SlotsToPutOnHeap []uint8
 }
 
 func (t *FunctionValue) Type() *Type {
@@ -77,6 +86,7 @@ func (t *FunctionValue) DebugPrint() {
 
 type ClosureValue struct {
 	Function *FunctionValue
+	Captures []*BoxValue
 }
 
 func (t *ClosureValue) Type() *Type {
@@ -91,8 +101,8 @@ func (t *ClosureValue) DebugPrint() {
 	t.Function.DebugPrint()
 }
 
-func NewClosure(fn *FunctionValue) *ClosureValue {
-	return &ClosureValue{fn}
+func NewClosure(fn *FunctionValue, captures []*BoxValue) *ClosureValue {
+	return &ClosureValue{fn, captures}
 }
 
 type StringValue struct {
@@ -397,4 +407,24 @@ func (t *MapValue) Get(key string) (Value, bool) {
 
 func NewMap() *MapValue {
 	return &MapValue{map[string]Value{}}
+}
+
+type BoxValue struct {
+	Val Value
+}
+
+func (t *BoxValue) Type() *Type {
+	return BoxType
+}
+
+func (t *BoxValue) String() string {
+	return fmt.Sprintf("Box[%s]", t.Val.String())
+}
+
+func (t *BoxValue) Get() Value {
+	return t.Val
+}
+
+func (t *BoxValue) Set(v Value) {
+	t.Val = v
 }

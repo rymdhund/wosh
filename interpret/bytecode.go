@@ -11,7 +11,7 @@ const (
 	OP_RETURN = iota
 	OP_RETURN_NIL
 	OP_LOAD_CONSTANT // TODO: Add OP_LOAD_CONSTANT_LONG to be able to use more than 256 constants
-	OP_LOAD_CLOSURE
+	OP_MAKE_CLOSURE
 	OP_TRUE
 	OP_FALSE
 	OP_NIL
@@ -20,39 +20,54 @@ const (
 	OP_JUMP // jump forward
 	OP_JUMP_IF_FALSE
 	OP_LOOP             // jump backwards
-	OP_LOAD_SLOT        // load a local variable
+	OP_LOAD_SLOT        // load a local variable from indexed slot
+	OP_LOAD_SLOT_HEAP   // load a variable from pointer in indexed slot
 	OP_LOAD_NAME        // load a global variable
 	OP_LOAD_METHOD_NAME // load method by name
 	OP_PUT_SLOT         // put top of stack into indexed stack slot
+	OP_PUT_SLOT_HEAP    // put top of stack into pointer at indexed stack slot
 	OP_PUT_GLOBAL_NAME  // put top of stack into global using the indexed name
 	OP_ADD
 	OP_CALL
 )
 
-var op_names = []string{
-	OP_RETURN:           "OP_RETURN",
-	OP_RETURN_NIL:       "RETURN_NIL",
-	OP_LOAD_CONSTANT:    "OP_LOAD_CONSTANT",
-	OP_LOAD_CLOSURE:     "OP_LOAD_CLOSURE",
-	OP_NIL:              "OP_NIL",
-	OP_TRUE:             "OP_TRUE",
-	OP_FALSE:            "OP_FALSE",
-	OP_EQ:               "OP_EQ",
-	OP_POP:              "OP_POP",
-	OP_JUMP:             "OP_JUMP",
-	OP_JUMP_IF_FALSE:    "OP_JUMP_IF_FALSE",
-	OP_LOOP:             "OP_LOOP",
-	OP_LOAD_SLOT:        "OP_LOAD_SLOT",
-	OP_LOAD_NAME:        "OP_LOAD_NAME",
-	OP_LOAD_METHOD_NAME: "OP_LOAD_METHOD_NAME",
-	OP_PUT_SLOT:         "OP_PUT_SLOT",
-	OP_PUT_GLOBAL_NAME:  "OP_PUT_GLOBAL_NAME",
-	OP_ADD:              "OP_ADD",
-	OP_CALL:             "OP_CALL",
+var op_names = []struct {
+	name string
+	size int
+}{
+	OP_RETURN:           {"OP_RETURN", 1},
+	OP_RETURN_NIL:       {"RETURN_NIL", 1},
+	OP_LOAD_CONSTANT:    {"OP_LOAD_CONSTANT", 2},
+	OP_MAKE_CLOSURE:     {"OP_MAKE_CLOSURE", 2},
+	OP_NIL:              {"OP_NIL", 1},
+	OP_TRUE:             {"OP_TRUE", 1},
+	OP_FALSE:            {"OP_FALSE", 1},
+	OP_EQ:               {"OP_EQ", 1},
+	OP_POP:              {"OP_POP", 1},
+	OP_JUMP:             {"OP_JUMP", 3},
+	OP_JUMP_IF_FALSE:    {"OP_JUMP_IF_FALSE", 3},
+	OP_LOOP:             {"OP_LOOP", 3},
+	OP_LOAD_SLOT:        {"OP_LOAD_SLOT", 2},
+	OP_LOAD_SLOT_HEAP:   {"OP_LOAD_SLOT_HEAP", 2},
+	OP_LOAD_NAME:        {"OP_LOAD_NAME", 2},
+	OP_LOAD_METHOD_NAME: {"OP_LOAD_METHOD_NAME", 2},
+	OP_PUT_SLOT:         {"OP_PUT_SLOT", 2},
+	OP_PUT_SLOT_HEAP:    {"OP_PUT_SLOT_HEAP", 2},
+	OP_PUT_GLOBAL_NAME:  {"OP_PUT_GLOBAL_NAME", 2},
+	OP_ADD:              {"OP_ADD", 1},
+	OP_CALL:             {"OP_CALL", 1},
 }
 
 func (o Op) String() string {
-	return op_names[o]
+	return op_names[o].name
+}
+
+func (o Op) Size() int {
+	s := op_names[o].size
+	if s <= 0 {
+		panic(fmt.Sprintf("Invalid size: %d", s))
+	}
+	return s
 }
 
 type Chunk struct {
@@ -101,79 +116,73 @@ func (chunk *Chunk) disassembleInstruction(offset int, w io.Writer) int {
 	instr := chunk.Code[offset]
 	switch instr {
 	case OP_RETURN:
-		return chunk.simpleInstruction(instr.String(), w)
+		chunk.simpleInstruction(instr.String(), w)
 	case OP_RETURN_NIL:
-		return chunk.simpleInstruction(instr.String(), w)
-	case OP_LOAD_CONSTANT:
-		return chunk.constantInstruction(instr.String(), offset, w)
+		chunk.simpleInstruction(instr.String(), w)
+	case OP_MAKE_CLOSURE, OP_LOAD_CONSTANT:
+		chunk.constantInstruction(instr.String(), offset, w)
 	case OP_NIL:
-		return chunk.simpleInstruction(instr.String(), w)
+		chunk.simpleInstruction(instr.String(), w)
 	case OP_TRUE:
-		return chunk.simpleInstruction(instr.String(), w)
+		chunk.simpleInstruction(instr.String(), w)
 	case OP_FALSE:
-		return chunk.simpleInstruction(instr.String(), w)
+		chunk.simpleInstruction(instr.String(), w)
 	case OP_EQ:
-		return chunk.simpleInstruction(instr.String(), w)
+		chunk.simpleInstruction(instr.String(), w)
 	case OP_ADD:
-		return chunk.simpleInstruction(instr.String(), w)
+		chunk.simpleInstruction(instr.String(), w)
 	case OP_POP:
-		return chunk.simpleInstruction(instr.String(), w)
+		chunk.simpleInstruction(instr.String(), w)
 	case OP_JUMP:
-		return chunk.jumpInstruction(instr.String(), offset, w)
+		chunk.jumpInstruction(instr.String(), offset, w)
 	case OP_JUMP_IF_FALSE:
-		return chunk.jumpInstruction(instr.String(), offset, w)
+		chunk.jumpInstruction(instr.String(), offset, w)
 	case OP_LOOP:
-		return chunk.jumpInstruction(instr.String(), offset, w)
+		chunk.jumpInstruction(instr.String(), offset, w)
 	case OP_LOAD_NAME:
-		return chunk.loadNameInstruction(instr.String(), offset, w)
+		chunk.loadNameInstruction(instr.String(), offset, w)
 	case OP_LOAD_METHOD_NAME:
-		return chunk.loadNameInstruction(instr.String(), offset, w)
-	case OP_PUT_SLOT:
-		return chunk.slotInstruction(instr.String(), offset, w)
+		chunk.loadNameInstruction(instr.String(), offset, w)
+	case OP_PUT_SLOT, OP_LOAD_SLOT:
+		chunk.slotInstruction(instr.String(), offset, w)
 	case OP_PUT_GLOBAL_NAME:
-		return chunk.loadNameInstruction(instr.String(), offset, w)
+		chunk.loadNameInstruction(instr.String(), offset, w)
 	case OP_CALL:
-		return chunk.callInstruction(instr.String(), offset, w)
+		chunk.callInstruction(instr.String(), offset, w)
 	default:
 		fmt.Fprintf(w, "Unknown opcode %s\n", instr.String())
-		return 1
 	}
+	return instr.Size()
 }
 
-func (chunk *Chunk) simpleInstruction(name string, w io.Writer) int {
+func (chunk *Chunk) simpleInstruction(name string, w io.Writer) {
 	fmt.Fprintf(w, "%-20s\n", name)
-	return 1
 }
 
-func (chunk *Chunk) constantInstruction(name string, offset int, w io.Writer) int {
+func (chunk *Chunk) constantInstruction(name string, offset int, w io.Writer) {
 	constIdx := chunk.Code[offset+1]
 	constant := chunk.Constants[constIdx]
 	fmt.Fprintf(w, "%-20s %4d '%s'\n", name, constIdx, constant)
-	return 2
 }
 
-func (chunk *Chunk) jumpInstruction(name string, offset int, w io.Writer) int {
+func (chunk *Chunk) jumpInstruction(name string, offset int, w io.Writer) {
 	jumpOffset := (uint16(chunk.Code[offset+1]) << 8) + uint16(chunk.Code[offset+1])
 	fmt.Fprintf(w, "%-20s %4d\n", name, jumpOffset)
-	return 3
 }
 
-func (chunk *Chunk) loadNameInstruction(name string, offset int, w io.Writer) int {
+func (chunk *Chunk) loadNameInstruction(name string, offset int, w io.Writer) {
 	nameIdx := chunk.Code[offset+1]
 	namex := chunk.Names[nameIdx]
 	fmt.Fprintf(w, "%-20s %4d '%s'\n", name, nameIdx, namex)
-	return 2
 }
 
-func (chunk *Chunk) slotInstruction(name string, offset int, w io.Writer) int {
+func (chunk *Chunk) slotInstruction(name string, offset int, w io.Writer) {
 	slot := chunk.Code[offset+1]
 	namex := chunk.LocalNames[slot]
 	fmt.Fprintf(w, "%-20s %4d '%s'\n", name, slot, namex)
-	return 2
 }
 
-func (chunk *Chunk) callInstruction(name string, offset int, w io.Writer) int {
+func (chunk *Chunk) callInstruction(name string, offset int, w io.Writer) {
 	arity := chunk.Code[offset+1]
 	fmt.Fprintf(w, "%-20s %4d\n", name, arity)
-	return 2
 }

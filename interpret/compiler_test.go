@@ -124,6 +124,57 @@ func TestCall(t *testing.T) {
 	}
 }
 
+func TestClosure(t *testing.T) {
+	res := run(t, "fn f() { a = 1\n fn g() { a }\n g} \n b = f()\n b()")
+	if !Equal(res, NewInt(1)) {
+		t.Errorf("expected 1, got %s", res)
+	}
+
+	res = run(t, "fn f() { a = 1\n fn g() { a = a + 1 }\n g()\n a} \n f()")
+	if !Equal(res, NewInt(2)) {
+		t.Errorf("expected 2, got %s", res)
+	}
+
+	res = run(t, "fn f() { a = 1\n fn g() { a = 2 }\n g()\n a} \n f()")
+	if !Equal(res, NewInt(2)) {
+		t.Errorf("expected 2, got %s", res)
+	}
+
+	res = run(t, `
+	fn f() {
+		a = 1
+		fn g() {
+			fn h() {
+				a = 2
+			}
+			h
+		}
+		h1 = g()
+		h1()
+		a
+	}
+	f()
+	`)
+	if !Equal(res, NewInt(2)) {
+		t.Errorf("expected 2, got %s", res)
+	}
+
+	res = run(t, `
+	fn f(x) {
+		fn g(y) {
+			x + y
+		}
+		g
+	}
+	add1 = f(1)
+	add3 = f(3)
+	add1(2) + add3(4)
+	`)
+	if !Equal(res, NewInt(10)) {
+		t.Errorf("expected 10, got %s", res)
+	}
+}
+
 func TestTry(t *testing.T) {
 	res := run(t, "try { do yield(1) } handle { yield(x) -> { y = x } } \n y")
 	if !Equal(res, NewInt(1)) {

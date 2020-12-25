@@ -43,16 +43,25 @@ func (frame *CallFrame) peekStack(offset int) Value {
 	return frame.stack[frame.stackTop-1-offset]
 }
 
-func (vm *VM) NewFrame(fn *ClosureValue, args []Value) {
+func (vm *VM) NewFrame(cl *ClosureValue, args []Value) {
 	frame := &vm.frames[vm.frameCount]
-	frame.closure = fn
+	frame.closure = cl
 	frame.ip = 0
-	frame.pushStack(fn)
+	frame.pushStack(cl)
 	for _, arg := range args {
 		frame.pushStack(arg)
 	}
-	for i := 0; i < len(fn.Function.Chunk.LocalNames)-len(args)-1; i++ {
+	for i := 0; i < len(cl.Function.Chunk.LocalNames)-len(args)-1; i++ {
 		frame.pushStack(Nil)
+	}
+	for _, x := range cl.Function.SlotsToPutOnHeap {
+		_, ok := frame.stack[x].(*BoxValue)
+		if !ok {
+			frame.stack[x] = &BoxValue{frame.stack[x]}
+		}
+	}
+	for i, x := range cl.Function.CaptureSlots {
+		frame.stack[x] = cl.Captures[i]
 	}
 	frame.returnFrame = vm.frameCount - 1
 	frame.resumeFrame = -1
@@ -61,7 +70,7 @@ func (vm *VM) NewFrame(fn *ClosureValue, args []Value) {
 
 func (vm *VM) interpret(main *FunctionValue) (Value, error) {
 	vm.frameCount = 0
-	vm.NewFrame(NewClosure(main), []Value{})
+	vm.NewFrame(NewClosure(main, []*BoxValue{}), []Value{})
 	return vm.run()
 }
 
@@ -76,10 +85,10 @@ func (frame *CallFrame) readConstant() Value {
 	return frame.closure.Function.Chunk.Constants[pos]
 }
 
-func (frame *CallFrame) readClosure() Value {
+func (frame *CallFrame) readFunction() *FunctionValue {
 	pos := frame.readCode()
 	fn := frame.closure.Function.Chunk.Constants[pos].(*FunctionValue)
-	return NewClosure(fn)
+	return fn
 }
 
 func (frame *CallFrame) readName() string {
@@ -123,7 +132,7 @@ func (vm *VM) run() (Value, error) {
 			}
 
 			vm.frameCount = frame.returnFrame + 1
-			// todo: clean up
+			// todo: clean up memory
 			if vm.frameCount == 0 {
 				return retVal, nil
 			} else {
@@ -133,9 +142,15 @@ func (vm *VM) run() (Value, error) {
 		case OP_LOAD_CONSTANT:
 			constant := frame.readConstant()
 			frame.pushStack(constant)
-		case OP_LOAD_CLOSURE:
-			constant := frame.readClosure()
-			frame.pushStack(constant)
+		case OP_MAKE_CLOSURE:
+			function := frame.readFunction()
+			captures := []*BoxValue{}
+			for _, i := range function.OuterCaptures {
+				v := frame.stack[i].(*BoxValue)
+				captures = append(captures, v)
+			}
+			closure := NewClosure(function, captures)
+			frame.pushStack(closure)
 		case OP_NIL:
 			frame.pushStack(Nil)
 		case OP_TRUE:
@@ -180,9 +195,24 @@ func (vm *VM) run() (Value, error) {
 		case OP_LOAD_SLOT:
 			slot := uint8(frame.readCode())
 			frame.pushStack(frame.stack[slot])
+		case OP_LOAD_SLOT_HEAP:
+			slot := uint8(frame.readCode())
+			frame.pushStack(frame.stack[slot].(*BoxValue).Get())
 		case OP_PUT_SLOT:
 			slot := uint8(frame.readCode())
 			frame.putSlot(slot, frame.popStack())
+		case OP_PUT_SLOT_HEAP:
+			slot := uint8(frame.readCode())
+			v := frame.popStack()
+			// we should never have nil pointer
+			/*
+				_, ok := frame.stack[slot].(*NilValue)
+				// If we have a nil pointer we make a new boxed value
+				if ok {
+					frame.stack[slot] = &BoxValue{Nil}
+				}
+			*/
+			frame.stack[slot].(*BoxValue).Set(v)
 		case OP_PUT_GLOBAL_NAME:
 			name := frame.readName()
 			vm.globals[name] = frame.popStack()

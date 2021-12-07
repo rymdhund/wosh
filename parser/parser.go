@@ -16,6 +16,8 @@ import (
 //   | Expr (";" MultiExpr)*
 //
 // Expr ->
+//   | ReturnStatement
+//	 | ResumeStatement
 //   | AssignExpr
 //
 // AssignExpr ->
@@ -163,7 +165,55 @@ func (p *Parser) parseBlockExpr() (*ast.BlockExpr, bool) {
 
 func (p *Parser) parseMultiExpr() (ast.Expr, bool) {
 	// TODO
+	return p.parseFullExpr()
+}
+
+func (p *Parser) parseFullExpr() (ast.Expr, bool) {
+	println("foo")
+	ret, ok := p.parseReturnStatement()
+	if ok {
+		return ret, true
+	}
+
+	res, ok := p.parseResumeStatement()
+	if ok {
+		return res, true
+	}
+
+	return p.parseExpr()
+}
+
+func (p *Parser) parseExpr() (ast.Expr, bool) {
 	return p.parseAssignExpr()
+}
+
+func (p *Parser) parseReturnStatement() (ast.Expr, bool) {
+	ret, ok := p.tokens.expectGet(lexer.RETURN)
+	if !ok {
+		return nil, false
+	}
+	exp, ok := p.parseExpr()
+	if ok {
+		return &ast.ReturnExpr{exp, ret.Pos}, true
+	}
+	return &ast.ReturnExpr{nil, ret.Pos}, true
+}
+
+func (p *Parser) parseResumeStatement() (ast.Expr, bool) {
+	res, ok := p.tokens.expectGet(lexer.RESUME)
+	if !ok {
+		return nil, false
+	}
+	ident, ok := p.parseIdent()
+	if !ok {
+		p.error("Expected an identifier after this 'resume'", res.Pos)
+		return nil, false
+	}
+	exp, ok := p.parseExpr()
+	if ok {
+		return &ast.ResumeExpr{ident, exp, res.Pos}, true
+	}
+	return &ast.ResumeExpr{ident, nil, res.Pos}, true
 }
 
 // AssignExpr ->
@@ -782,6 +832,17 @@ func (p *Parser) parseMatchCase() (*ast.MatchCaseExpr, bool) {
 		return nil, false
 	}
 
+	var name *ast.Ident
+	if p.tokens.expect(lexer.AT) {
+		name, ok = p.parseIdent()
+		if !ok {
+			p.error(fmt.Sprintf("Expected name following '@', found '%s'", p.tokens.peek().Lit), p.tokens.peek().Pos)
+			p.tokens.rollback()
+			return nil, false
+		}
+
+	}
+
 	if !p.tokens.expect(lexer.SINGLE_ARROW) {
 		p.error("Expected '->'", p.tokens.peek().Pos)
 		p.tokens.rollback()
@@ -812,6 +873,7 @@ func (p *Parser) parseMatchCase() (*ast.MatchCaseExpr, bool) {
 		Pattern: &ast.PatternExpr{
 			Ident:  ident,
 			Params: params,
+			Name:   name,
 		},
 		Then: block,
 	}, true

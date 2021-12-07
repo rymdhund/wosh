@@ -38,7 +38,10 @@ const (
 	TRY
 	HANDLE
 	DO
+	RESUME
+	RETURN
 	SINGLE_ARROW
+	AT
 )
 
 var tokens = []string{
@@ -73,7 +76,10 @@ var tokens = []string{
 	TRY:          "TRY",
 	HANDLE:       "HANDLE",
 	DO:           "DO",
+	RESUME:       "RESUME",
+	RETURN:       "RETURN",
 	SINGLE_ARROW: "->",
+	AT:           "@",
 }
 
 func (t Token) String() string {
@@ -243,6 +249,11 @@ func (l *Lexer) LexTokenItem() TokenItem {
 			t := TokenItem{PIPE_OP, "|", l.pos}
 			l.step(1)
 			return t
+		case '@':
+			l.pop()
+			t := TokenItem{AT, "@", l.pos}
+			l.step(1)
+			return t
 		case '\'', '"', '`':
 			return l.lexStringAndCmd()
 		case '#':
@@ -364,6 +375,10 @@ func (l *Lexer) lexIdentOrKw() TokenItem {
 		return TokenItem{HANDLE, lit, pos}
 	case "do":
 		return TokenItem{DO, lit, pos}
+	case "resume":
+		return TokenItem{RESUME, lit, pos}
+	case "return":
+		return TokenItem{RETURN, lit, pos}
 	default:
 		return TokenItem{IDENT, lit, pos}
 	}

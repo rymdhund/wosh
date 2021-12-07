@@ -10,9 +10,10 @@ const DEBUG_TRACE = true
 const DEBUG = true
 
 type VM struct {
-	frames     [FRAMES_MAX]CallFrame
-	frameCount int
-	globals    map[string]Value
+	//frames       [FRAMES_MAX]CallFrame
+	frameCount   int // for debug purposes
+	currentFrame *CallFrame
+	globals      map[string]Value
 }
 
 type CallFrame struct {
@@ -20,9 +21,21 @@ type CallFrame struct {
 	ip          int
 	code        []Op // points to chunk code
 	stack       [STACK_MAX]Value
-	stackTop    int // points to next unused element in stack
-	returnFrame int // which frame to return to
-	resumeFrame int // which frame to resume to
+	stackTop    int        // points to next unused element in stack
+	returnFrame *CallFrame // which frame to return to
+	returnIp    int
+	//resumeFrame int // which frame to resume to
+
+	// Handlers for effects
+	handlers []Handler
+}
+
+type Handler struct {
+	effect string
+	//handler  *ClosureValue
+	//doneLine int // line to land at after handler returns
+	frame *CallFrame
+	ip    int // instruction pointer
 }
 
 func NewVm() *VM {
@@ -43,8 +56,8 @@ func (frame *CallFrame) peekStack(offset int) Value {
 	return frame.stack[frame.stackTop-1-offset]
 }
 
-func (vm *VM) NewFrame(cl *ClosureValue, args []Value) {
-	frame := &vm.frames[vm.frameCount]
+func (vm *VM) NewFrame(cl *ClosureValue, args []Value, returnFrame *CallFrame, returnIp int) *CallFrame {
+	frame := &CallFrame{} //&vm.frames[vm.currentFrame]
 	frame.closure = cl
 	frame.ip = 0
 	frame.pushStack(cl)
@@ -63,14 +76,16 @@ func (vm *VM) NewFrame(cl *ClosureValue, args []Value) {
 	for i, x := range cl.Function.CaptureSlots {
 		frame.stack[x] = cl.Captures[i]
 	}
-	frame.returnFrame = vm.frameCount - 1
-	frame.resumeFrame = -1
+	frame.returnFrame = returnFrame
+	frame.returnIp = returnIp
 	vm.frameCount++
+	return frame
 }
 
 func (vm *VM) interpret(main *FunctionValue) (Value, error) {
 	vm.frameCount = 0
-	vm.NewFrame(NewClosure(main, []*BoxValue{}), []Value{})
+	frame := vm.NewFrame(NewClosure(main, []*BoxValue{}), []Value{}, nil, -1)
+	vm.currentFrame = frame
 	return vm.run()
 }
 
@@ -105,13 +120,14 @@ func (frame *CallFrame) putSlot(idx uint8, v Value) {
 }
 
 func (vm *VM) run() (Value, error) {
-	frame := &vm.frames[vm.frameCount-1]
 	for true {
+		frame := vm.currentFrame
 
+		startIP := frame.ip
 		instr := frame.readCode()
 
 		if DEBUG_TRACE {
-			fmt.Printf("%-20s ", instr)
+			fmt.Printf("%-4d %-20s ", startIP, instr)
 			for i := 0; i < frame.stackTop; i++ {
 				fmt.Printf("[ %s ]", frame.stack[i].String())
 			}
@@ -131,13 +147,14 @@ func (vm *VM) run() (Value, error) {
 				}
 			}
 
-			vm.frameCount = frame.returnFrame + 1
 			// todo: clean up memory
-			if vm.frameCount == 0 {
+			if frame.returnFrame == nil {
 				return retVal, nil
 			} else {
-				frame = &vm.frames[vm.frameCount-1]
-				frame.pushStack(retVal)
+				frame.returnFrame.ip = frame.returnIp
+				fmt.Printf("returning to %d\n", frame.returnFrame.ip)
+				frame.returnFrame.pushStack(retVal)
+				vm.currentFrame = frame.returnFrame
 			}
 		case OP_LOAD_CONSTANT:
 			constant := frame.readConstant()
@@ -151,6 +168,8 @@ func (vm *VM) run() (Value, error) {
 			}
 			closure := NewClosure(function, captures)
 			frame.pushStack(closure)
+		case OP_NOP:
+			// do nothing
 		case OP_NIL:
 			frame.pushStack(Nil)
 		case OP_TRUE:
@@ -160,7 +179,6 @@ func (vm *VM) run() (Value, error) {
 		case OP_EQ:
 			doCall := frame.opEq()
 			if doCall {
-				frame = &vm.frames[vm.frameCount-1]
 				vm.opCall(2)
 			}
 		case OP_ADD:
@@ -170,7 +188,14 @@ func (vm *VM) run() (Value, error) {
 			}
 			if doCall {
 				vm.opCall(2)
-				frame = &vm.frames[vm.frameCount-1]
+			}
+		case OP_LESS:
+			doCall, err := frame.opLess()
+			if err != nil {
+				return nil, err
+			}
+			if doCall {
+				vm.opCall(2)
 			}
 		case OP_POP:
 			frame.popStack()
@@ -179,10 +204,10 @@ func (vm *VM) run() (Value, error) {
 			frame.ip += int(offset)
 		case OP_JUMP_IF_FALSE:
 			offset := frame.readUint16()
-			if GetBool(frame.peekStack(0)) {
+			if !GetBool(frame.popStack()) {
 				frame.ip += int(offset)
 			}
-		case OP_LOAD_NAME:
+		case OP_LOAD_GLOBAL_NAME:
 			name := frame.readName()
 			val, ok := vm.globals[name]
 			if !ok {
@@ -219,8 +244,19 @@ func (vm *VM) run() (Value, error) {
 		case OP_CALL:
 			arity := int(frame.readCode())
 			vm.opCall(arity)
-			// will have called a function
-			frame = &vm.frames[vm.frameCount-1]
+		case OP_SET_HANDLER:
+			effect := frame.readName()
+			handlerIp := frame.readUint16()
+
+			frame.pushHandler(effect, frame, int(handlerIp))
+		case OP_POP_HANDLERS:
+			numHandlers := int(frame.readCode())
+			frame.handlers = frame.handlers[:len(frame.handlers)-numHandlers]
+		case OP_DO:
+			arity := int(frame.readCode())
+			vm.opDo(arity)
+		case OP_RESUME:
+			vm.opResume()
 		default:
 			return nil, fmt.Errorf("Unexpected opcode %d", instr)
 		}
@@ -269,6 +305,28 @@ func (frame *CallFrame) opEq() bool {
 }
 
 // return true if we need to call a function afterwards
+func (frame *CallFrame) opLess() (bool, error) {
+	b := frame.popStack()
+	a := frame.popStack()
+
+	switch l := a.(type) {
+	case *IntValue:
+		r, ok := b.(*IntValue)
+		if !ok {
+			return false, fmt.Errorf("Trying to compare less between %s and %s", a.Type().Name, b.Type().Name)
+		} else {
+			frame.pushStack(NewBool(l.Val < r.Val))
+		}
+	default:
+		frame.pushStack(a.Type().Methods["lt"])
+		frame.pushStack(a)
+		frame.pushStack(b)
+		return true, nil
+	}
+	return false, nil
+}
+
+// return true if we need to call a function afterwards
 func (frame *CallFrame) opAdd() (bool, error) {
 	b := frame.popStack()
 	a := frame.popStack()
@@ -305,9 +363,73 @@ func (frame *CallFrame) opAdd() (bool, error) {
 }
 
 func (vm *VM) opCall(arity int) {
-	frame := &vm.frames[vm.frameCount-1]
+	frame := vm.currentFrame
 	fn := frame.peekStack(arity).(*ClosureValue)
-	vm.NewFrame(fn, frame.stack[frame.stackTop-arity:frame.stackTop])
 
+	newFrame := vm.NewFrame(fn, frame.stack[frame.stackTop-arity:frame.stackTop], frame, frame.ip)
+	vm.currentFrame = newFrame
 	frame.stackTop -= arity + 1
+}
+
+func (frame *CallFrame) findHandler(name string) *Handler {
+	for _, h := range frame.handlers {
+		if h.effect == name {
+			return &h
+		}
+	}
+	return nil
+}
+
+func (vm *VM) opDo(arity int) {
+	frame := vm.currentFrame
+	effect := frame.popStack().(*StringValue).Val
+
+	var handler *Handler
+
+	handlerFrame := frame
+	for handlerFrame != nil && handler == nil {
+		handler = handlerFrame.findHandler(effect)
+		if handler != nil {
+			break
+		}
+		handlerFrame = handlerFrame.returnFrame
+	}
+
+	if handler == nil {
+		panic(fmt.Sprintf("No handler for effect '%s'", effect))
+	}
+
+	for i := 0; i < arity; i++ {
+		v := frame.popStack()
+		handlerFrame.pushStack(v)
+	}
+
+	fmt.Printf("Do")
+	// Create continuation
+	k := NewContinuation(frame)
+	handlerFrame.pushStack(k)
+	handlerFrame.ip = handler.ip
+	vm.currentFrame = handlerFrame
+
+	fmt.Printf("Effecting to %d\n", handlerFrame.ip)
+}
+
+func (frame *CallFrame) pushHandler(effect string, handlerFrame *CallFrame, ip int) {
+	frame.handlers = append(frame.handlers, struct {
+		effect string
+		frame  *CallFrame
+		ip     int
+	}{effect, handlerFrame, ip})
+}
+
+func (vm *VM) opResume() {
+	v := vm.currentFrame.popStack()
+
+	switch continuation := v.(type) {
+	case *ContinuationValue:
+		continuation.Frame.pushStack(vm.currentFrame.popStack())
+		vm.currentFrame = continuation.Frame
+	default:
+		panic("Expected continuation on top of stack")
+	}
 }

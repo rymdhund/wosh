@@ -220,6 +220,7 @@ func (t *MatchCaseExpr) exprType()           {}
 type PatternExpr struct {
 	Ident  *Ident
 	Params []*ParamExpr
+	Name   *Ident //optional
 }
 
 func (t *PatternExpr) Pos() lexer.Position { return t.Ident.Pos() }
@@ -242,3 +243,20 @@ type DoExpr struct {
 
 func (t *DoExpr) Pos() lexer.Position { return t.TPos }
 func (t *DoExpr) exprType()           {}
+
+type ReturnExpr struct {
+	Value Expr // optional
+	TPos  lexer.Position
+}
+
+func (t *ReturnExpr) Pos() lexer.Position { return t.TPos }
+func (t *ReturnExpr) exprType()           {}
+
+type ResumeExpr struct {
+	Ident *Ident
+	Value Expr // optional
+	TPos  lexer.Position
+}
+
+func (t *ResumeExpr) Pos() lexer.Position { return t.TPos }
+func (t *ResumeExpr) exprType()           {}

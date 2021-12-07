@@ -301,3 +301,22 @@ func TestParseMiscCombinations(t *testing.T) {
 		}
 	}
 }
+
+func TestParseReturn(t *testing.T) {
+	tests := []string{
+		"return",
+		"return ()",
+		"return 1 + 2",
+	}
+	for _, prog := range tests {
+		p := NewParser(prog)
+		exprs, err := p.Parse()
+		if err != nil {
+			t.Error(err)
+		}
+		_, ok := exprs.Children[0].(*ast.ReturnExpr)
+		if !ok {
+			t.Errorf("expected return expr, got %+v", exprs.Children[0])
+		}
+	}
+}

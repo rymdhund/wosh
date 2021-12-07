@@ -28,6 +28,7 @@ var FunctionType = &Type{"Function", FunctionMap{}}
 var ClosureType = &Type{"Closure", FunctionMap{}}
 var ExceptionType = &Type{"Exception", FunctionMap{}}
 var BoxType = &Type{"Box", FunctionMap{}}
+var ContinuationType = &Type{"Continuation", FunctionMap{}}
 
 type Value interface {
 	Type() *Type
@@ -427,4 +428,20 @@ func (t *BoxValue) Get() Value {
 
 func (t *BoxValue) Set(v Value) {
 	t.Val = v
+}
+
+type ContinuationValue struct {
+	Frame *CallFrame
+}
+
+func (t *ContinuationValue) Type() *Type {
+	return ContinuationType
+}
+
+func NewContinuation(frame *CallFrame) *ContinuationValue {
+	return &ContinuationValue{frame}
+}
+
+func (t *ContinuationValue) String() string {
+	return fmt.Sprintf("Continuation[]")
 }

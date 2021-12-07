@@ -32,7 +32,6 @@ func run(t *testing.T, prog string) Value {
 	if err != nil {
 		t.Fatal(err)
 	}
-	function.DebugPrint()
 
 	vm := NewVm()
 	v, err := vm.interpret(function)
@@ -77,6 +76,45 @@ func TestAdd(t *testing.T) {
 	}
 	if !Equal(NewInt(2), v) {
 		t.Error("Expected 2")
+	}
+}
+
+func TestIf(t *testing.T) {
+	res := run(t, "if 1 == 1 { 2 } else { 3 }")
+	if !Equal(res, NewInt(2)) {
+		t.Errorf("expected 2, got %s", res)
+	}
+
+	res = run(t, "if 1 == 2 { 3 } else { 4 }")
+	if !Equal(res, NewInt(4)) {
+		t.Errorf("expected 4, got %s", res)
+	}
+
+	res = run(t, "x = 0 \n if 1 == 1 { x = 10 } \n x")
+	if !Equal(res, NewInt(10)) {
+		t.Errorf("expected 10, got %s", res)
+	}
+
+	res = run(t, "x = 0 \n if 1 == 2 { x = 10 } \n x")
+	if !Equal(res, NewInt(0)) {
+		t.Errorf("expected 0, got %s", res)
+	}
+}
+
+func TestFor(t *testing.T) {
+	res := run(t, "x = 1 \n for x == 1 { x = x + 1 } \n x")
+	if !Equal(res, NewInt(2)) {
+		t.Errorf("expected 2, got %s", res)
+	}
+
+	res = run(t, "x = 1 \n for x < 10 { x = x + 1 } \n x")
+	if !Equal(res, NewInt(10)) {
+		t.Errorf("expected 10, got %s", res)
+	}
+
+	res = run(t, "x = 1 \n for false { x = x + 1 } \n x")
+	if !Equal(res, NewInt(1)) {
+		t.Errorf("expected 1, got %s", res)
 	}
 }
 
@@ -176,8 +214,179 @@ func TestClosure(t *testing.T) {
 }
 
 func TestTry(t *testing.T) {
-	res := run(t, "try { do yield(1) } handle { yield(x) -> { y = x } } \n y")
+	res := run(t, `
+	fn foo() {
+		y = 0
+		try {
+			do yield(1)
+		} handle {
+			yield(x) -> { y = x }
+		}
+		y
+	}
+	foo()
+	`)
 	if !Equal(res, NewInt(1)) {
 		t.Errorf("expected 1, got %s", res)
+	}
+}
+
+func TestTry2(t *testing.T) {
+	res := run(t, `
+	fn foo() {
+		y = 0
+		try {
+			do yield(1)
+			y = 3  # will not be evaluated
+		} handle {
+			yield(x) -> {
+				y = x
+			}
+		}
+		y
+	}
+	foo()
+	`)
+	if !Equal(res, NewInt(1)) {
+		t.Errorf("expected 1, got %s", res)
+	}
+}
+
+func TestTry3(t *testing.T) {
+	res := run(t, `
+	fn bar() {
+		do yield(3)
+	}
+	fn foo() {
+		y = 0
+		try {
+			bar()
+		} handle {
+			yield(x) -> {
+				y = x
+			}
+		}
+		y
+	}
+	foo()
+	`)
+	if !Equal(res, NewInt(3)) {
+		t.Errorf("expected 3, got %s", res)
+	}
+}
+
+func TestTry4(t *testing.T) {
+	res := run(t, `
+	fn bar() {
+		do yield(3)
+	}
+	fn baz() {
+		bar()
+	}
+	fn foo() {
+		y = 0
+		try {
+			baz()
+		} handle {
+			yield(x) -> {
+				y = x
+			}
+		}
+		y
+	}
+	foo()
+	`)
+	if !Equal(res, NewInt(3)) {
+		t.Errorf("expected 3, got %s", res)
+	}
+}
+
+func TestTry5(t *testing.T) {
+	res := run(t, `
+	fn count() {
+		i = 0
+		for 1 == 1 {
+			do yield(i)
+			i = i + 1
+		}
+	}
+	fn foo() {
+		y = 0
+		try {
+			count()
+		} handle {
+			yield(x) @ k -> {
+				y = x
+				if x < 3 {
+					resume k
+				}
+			}
+		}
+		y
+	}
+	foo()
+	`)
+	if !Equal(res, NewInt(3)) {
+		t.Errorf("expected 3, got %s", res)
+	}
+}
+
+func TestTry6(t *testing.T) {
+	res := run(t, `
+	try {
+		3
+	} handle {
+		yield(x) -> {
+			4
+		}
+	}
+	`)
+	if !Equal(res, NewInt(3)) {
+		t.Errorf("expected 3, got %s", res)
+	}
+}
+
+func TestTry7(t *testing.T) {
+	res := run(t, `
+	try {
+		do yield(1)
+		3
+	} handle {
+		yield(x) -> {
+			4
+		}
+	}
+	`)
+	if !Equal(res, NewInt(4)) {
+		t.Errorf("expected 4, got %s", res)
+	}
+}
+
+func TestTry8(t *testing.T) {
+	res := run(t, `
+	fn count() {
+		do eff1(100)
+		do eff2(10)
+		3
+	}
+	fn foo() {
+		sum = 0
+		try {
+			count() + sum
+		} handle {
+			eff1(x) @ k -> {
+				sum = sum + x
+				resume k
+			}
+			eff2(x) @ k -> {
+				sum = sum + x
+				resume k
+			}
+		}
+	}
+	foo()
+	`)
+	if !Equal(res, NewInt(113)) {
+		t.Errorf("expected 113, got %s", res)
 	}
 }

@@ -200,12 +200,19 @@ func (vm *VM) run() (Value, error) {
 		case OP_LESS_EQ:
 			panic("Not implemented")
 		case OP_NOT:
-			doCall, err := frame.opNot()
+			err := frame.opNot()
 			if err != nil {
 				return nil, err
 			}
-			if doCall {
-				vm.opCall(2)
+		case OP_AND:
+			err := frame.opAnd()
+			if err != nil {
+				return nil, err
+			}
+		case OP_OR:
+			err := frame.opOr()
+			if err != nil {
+				return nil, err
 			}
 		case OP_POP:
 			frame.popStack()
@@ -342,16 +349,52 @@ func (frame *CallFrame) opLess() (bool, error) {
 	return false, nil
 }
 
-func (frame *CallFrame) opNot() (bool, error) {
+func (frame *CallFrame) opNot() error {
 	a := frame.popStack()
 
 	switch l := a.(type) {
 	case *BoolValue:
 		frame.pushStack(NewBool(!l.Val))
 	default:
-		return false, fmt.Errorf("Trying to not %s", a.Type().Name)
+		return fmt.Errorf("Trying to not %s", a.Type().Name)
 	}
-	return false, nil
+	return nil
+}
+
+func (frame *CallFrame) opAnd() error {
+	a := frame.popStack()
+	b := frame.popStack()
+
+	switch l := a.(type) {
+	case *BoolValue:
+		r, ok := b.(*BoolValue)
+		if !ok {
+			return fmt.Errorf("Trying to and %s and %s", a.Type().Name, b.Type().Name)
+		} else {
+			frame.pushStack(NewBool(l.Val && r.Val))
+		}
+	default:
+		return fmt.Errorf("Trying to and %s and %s", a.Type().Name, b.Type().Name)
+	}
+	return nil
+}
+
+func (frame *CallFrame) opOr() error {
+	a := frame.popStack()
+	b := frame.popStack()
+
+	switch l := a.(type) {
+	case *BoolValue:
+		r, ok := b.(*BoolValue)
+		if !ok {
+			return fmt.Errorf("Trying to or %s and %s", a.Type().Name, b.Type().Name)
+		} else {
+			frame.pushStack(NewBool(l.Val || r.Val))
+		}
+	default:
+		return fmt.Errorf("Trying to or %s and %s", a.Type().Name, b.Type().Name)
+	}
+	return nil
 }
 
 // return true if we need to call a function afterwards

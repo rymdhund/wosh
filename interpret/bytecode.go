@@ -22,6 +22,8 @@ const (
 	OP_LESS    // compare top elements of stack
 	OP_LESS_EQ // compare top elements of stack
 	OP_NOT     // invert top boolean element on stack
+	OP_AND     // And top two elements on stack
+	OP_OR      // Or top two elements on stack
 
 	OP_POP
 	OP_SWAP // swap top two elements on stack
@@ -69,6 +71,8 @@ var op_names = []struct {
 	OP_LESS:             {"OP_LESS", 1},
 	OP_LESS_EQ:          {"OP_LESS_EQ", 1},
 	OP_NOT:              {"OP_NOT", 1},
+	OP_AND:              {"OP_AND", 1},
+	OP_OR:               {"OP_OR", 1},
 	OP_POP:              {"OP_POP", 1},
 	OP_SWAP:             {"OP_SWAP", 1},
 	OP_JUMP:             {"OP_JUMP", 3},
@@ -222,6 +226,10 @@ func (chunk *Chunk) disassembleInstruction(offset int, w io.Writer) int {
 	case OP_LESS_EQ:
 		chunk.simpleInstruction(instr.String(), w)
 	case OP_NOT:
+		chunk.simpleInstruction(instr.String(), w)
+	case OP_AND:
+		chunk.simpleInstruction(instr.String(), w)
+	case OP_OR:
 		chunk.simpleInstruction(instr.String(), w)
 	case OP_ADD:
 		chunk.simpleInstruction(instr.String(), w)

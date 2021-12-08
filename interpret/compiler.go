@@ -337,10 +337,10 @@ func (c *Compiler) CompileOpExpr(op *ast.OpExpr) error {
 	case ">=":
 		c.chunk.addOp1(OP_LESS, op.Pos().Line)
 		c.chunk.addOp1(OP_NOT, op.Pos().Line)
-		//	case "&&":
-		//		return builtin.BoolAnd(o1, o2), NoExnVal
-		//	case "||":
-		//		return builtin.BoolOr(o1, o2), NoExnVal
+	case "&&":
+		c.chunk.addOp1(OP_AND, op.Pos().Line)
+	case "||":
+		c.chunk.addOp1(OP_OR, op.Pos().Line)
 		//	case "::":
 		//		return builtin.Cons(o1, o2), NoExnVal
 	default:

@@ -430,3 +430,18 @@ func TestCompare(t *testing.T) {
 	assertTrue(t, "1 != 2")
 	assertTrue(t, "2 != 1")
 }
+
+func TestBool(t *testing.T) {
+	assertTrue(t, "true")
+	assertFalse(t, "false")
+
+	assertTrue(t, "true || true")
+	assertTrue(t, "true || false")
+	assertTrue(t, "false || true")
+	assertFalse(t, "false || false")
+
+	assertTrue(t, "true && true")
+	assertFalse(t, "true && false")
+	assertFalse(t, "false && true")
+	assertFalse(t, "false && false")
+}

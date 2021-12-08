@@ -435,6 +435,9 @@ func TestBool(t *testing.T) {
 	assertTrue(t, "true")
 	assertFalse(t, "false")
 
+	assertFalse(t, "!true")
+	assertTrue(t, "!false")
+
 	assertTrue(t, "true || true")
 	assertTrue(t, "true || false")
 	assertTrue(t, "false || true")

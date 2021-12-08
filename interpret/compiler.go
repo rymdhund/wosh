@@ -202,9 +202,9 @@ func (c *Compiler) CompileExpr(exp ast.Expr) error {
 		return c.CompileResumeExpr(v)
 	case *ast.ParenthExpr:
 		return c.CompileExpr(v.Inside)
+	case *ast.UnaryExpr:
+		return c.CompileUnaryExpr(v)
 	/*
-		case *ast.UnaryExpr:
-			return runner.RunUnaryExpr(env, v)
 		case *ast.ListExpr:
 			return runner.RunListExpr(env, v)
 		case *ast.MapExpr:
@@ -343,6 +343,26 @@ func (c *Compiler) CompileOpExpr(op *ast.OpExpr) error {
 		c.chunk.addOp1(OP_OR, op.Pos().Line)
 		//	case "::":
 		//		return builtin.Cons(o1, o2), NoExnVal
+	default:
+		panic(fmt.Sprintf("Not implement operator '%s'", op.Op))
+	}
+	return nil
+}
+
+func (c *Compiler) CompileUnaryExpr(op *ast.UnaryExpr) error {
+	err := c.CompileExpr(op.Right)
+	if err != nil {
+		return err
+	}
+	switch op.Op {
+	case "!":
+		c.chunk.addOp1(OP_NOT, op.Pos().Line)
+		//	case "-":
+		//		return builtin.Sub(o1, o2), NoExnVal
+		//	case "*":
+		//		return builtin.Mult(o1, o2), NoExnVal
+		//	case "/":
+		//		return builtin.Div(o1, o2), NoExnVal
 	default:
 		panic(fmt.Sprintf("Not implement operator '%s'", op.Op))
 	}

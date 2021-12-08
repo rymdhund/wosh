@@ -92,7 +92,7 @@ func (c *Compiler) getOrSetName(name string) uint8 {
 	return uint8(idx)
 }
 
-func compile(function *ast.FuncDefExpr) (*FunctionValue, error) {
+func Compile(function *ast.FuncDefExpr) (*FunctionValue, error) {
 	return compileFunction(function, nil)
 }
 
@@ -200,6 +200,8 @@ func (c *Compiler) CompileExpr(exp ast.Expr) error {
 		return c.CompileIfExpr(v)
 	case *ast.ResumeExpr:
 		return c.CompileResumeExpr(v)
+	case *ast.ParenthExpr:
+		return c.CompileExpr(v.Inside)
 	/*
 		case *ast.UnaryExpr:
 			return runner.RunUnaryExpr(env, v)
@@ -258,8 +260,6 @@ func (c *Compiler) CompileExpr(exp ast.Expr) error {
 			default:
 				panic(fmt.Sprintf("This is a bug! Invalid capture modifier: '%s'", v.Mod))
 			}
-		case *ast.ParenthExpr:
-			return runner.RunExpr(env, v.Inside)
 		case *ast.CommandExpr:
 			return runner.RunCommandExpr(env, v)
 	*/
@@ -321,16 +321,22 @@ func (c *Compiler) CompileOpExpr(op *ast.OpExpr) error {
 		//		return builtin.Div(o1, o2), NoExnVal
 	case "==":
 		c.chunk.addOp1(OP_EQ, op.Pos().Line)
-		//	case "!=":
-		//		return builtin.Neq(o1, o2), NoExnVal
-		//	case "<=":
-		//		return builtin.LessEq(o1, o2), NoExnVal
+	case "!=":
+		// TODO: Optimize these comparisons to only use one opcode each
+		c.chunk.addOp1(OP_EQ, op.Pos().Line)
+		c.chunk.addOp1(OP_NOT, op.Pos().Line)
 	case "<":
 		c.chunk.addOp1(OP_LESS, op.Pos().Line)
-		//	case ">=":
-		//		return builtin.GreaterEq(o1, o2), NoExnVal
-		//	case ">":
-		//		return builtin.Greater(o1, o2), NoExnVal
+	case ">":
+		c.chunk.addOp1(OP_SWAP, op.Pos().Line)
+		c.chunk.addOp1(OP_LESS, op.Pos().Line)
+	case "<=":
+		c.chunk.addOp1(OP_SWAP, op.Pos().Line)
+		c.chunk.addOp1(OP_LESS, op.Pos().Line)
+		c.chunk.addOp1(OP_NOT, op.Pos().Line)
+	case ">=":
+		c.chunk.addOp1(OP_LESS, op.Pos().Line)
+		c.chunk.addOp1(OP_NOT, op.Pos().Line)
 		//	case "&&":
 		//		return builtin.BoolAnd(o1, o2), NoExnVal
 		//	case "||":

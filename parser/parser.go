@@ -169,7 +169,6 @@ func (p *Parser) parseMultiExpr() (ast.Expr, bool) {
 }
 
 func (p *Parser) parseFullExpr() (ast.Expr, bool) {
-	println("foo")
 	ret, ok := p.parseReturnStatement()
 	if ok {
 		return ret, true

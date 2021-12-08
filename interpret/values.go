@@ -49,6 +49,12 @@ func Equal(v1, v2 Value) bool {
 			return false
 		}
 		return x1.Val == x2.Val
+	case *BoolValue:
+		x2, ok := v2.(*BoolValue)
+		if !ok {
+			return false
+		}
+		return x1.Val == x2.Val
 	case *NilValue:
 		_, ok := v2.(*NilValue)
 		if !ok {

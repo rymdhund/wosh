@@ -28,13 +28,13 @@ func run(t *testing.T, prog string) Value {
 	if err != nil {
 		t.Fatal(err)
 	}
-	function, err := compile(main)
+	function, err := Compile(main)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	vm := NewVm()
-	v, err := vm.interpret(function)
+	v, err := vm.Interpret(function)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,14 +47,14 @@ func TestCompile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	function, err := compile(main)
+	function, err := Compile(main)
 	if err != nil {
 		t.Fatal(err)
 	}
 	function.DebugPrint()
 
 	vm := NewVm()
-	vm.interpret(function)
+	vm.Interpret(function)
 }
 
 func TestAdd(t *testing.T) {
@@ -63,14 +63,14 @@ func TestAdd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	function, err := compile(main)
+	function, err := Compile(main)
 	if err != nil {
 		t.Fatal(err)
 	}
 	function.DebugPrint()
 
 	vm := NewVm()
-	v, err := vm.interpret(function)
+	v, err := vm.Interpret(function)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,14 +124,14 @@ func TestFnDef(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	function, err := compile(main)
+	function, err := Compile(main)
 	if err != nil {
 		t.Fatal(err)
 	}
 	function.DebugPrint()
 
 	vm := NewVm()
-	v, err := vm.interpret(function)
+	v, err := vm.Interpret(function)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -389,4 +389,44 @@ func TestTry8(t *testing.T) {
 	if !Equal(res, NewInt(113)) {
 		t.Errorf("expected 113, got %s", res)
 	}
+}
+
+func assertFalse(t *testing.T, prog string) {
+	res := run(t, prog)
+	if !Equal(res, NewBool(false)) {
+		t.Errorf("expected false, got %s", res)
+	}
+}
+
+func assertTrue(t *testing.T, prog string) {
+	res := run(t, prog)
+	if !Equal(res, NewBool(true)) {
+		t.Errorf("expected true, got %s", res)
+	}
+}
+
+func TestCompare(t *testing.T) {
+	assertFalse(t, "1 > 2")
+	assertFalse(t, "1 > 1")
+	assertTrue(t, "2 > 1")
+
+	assertFalse(t, "1 >= 2")
+	assertTrue(t, "1 >= 1")
+	assertTrue(t, "2 >= 1")
+
+	assertTrue(t, "1 < 2")
+	assertFalse(t, "1 < 1")
+	assertFalse(t, "2 < 1")
+
+	assertTrue(t, "1 <= 2")
+	assertTrue(t, "1 <= 1")
+	assertFalse(t, "2 <= 1")
+
+	assertTrue(t, "1 == 1")
+	assertFalse(t, "1 == 2")
+	assertFalse(t, "2 == 1")
+
+	assertFalse(t, "1 != 1")
+	assertTrue(t, "1 != 2")
+	assertTrue(t, "2 != 1")
 }

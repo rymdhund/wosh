@@ -17,9 +17,14 @@ const (
 	OP_TRUE
 	OP_FALSE
 	OP_NIL
-	OP_EQ   // compare top elements of stack
-	OP_LESS // compare top elements of stack
+
+	OP_EQ      // compare top elements of stack
+	OP_LESS    // compare top elements of stack
+	OP_LESS_EQ // compare top elements of stack
+	OP_NOT     // invert top boolean element on stack
+
 	OP_POP
+	OP_SWAP // swap top two elements on stack
 
 	// Jump instructions. All instructions are relative to current pos.
 	// Instructions are 1 byte followed by two byte offset to where to jump
@@ -62,7 +67,10 @@ var op_names = []struct {
 	OP_FALSE:            {"OP_FALSE", 1},
 	OP_EQ:               {"OP_EQ", 1},
 	OP_LESS:             {"OP_LESS", 1},
+	OP_LESS_EQ:          {"OP_LESS_EQ", 1},
+	OP_NOT:              {"OP_NOT", 1},
 	OP_POP:              {"OP_POP", 1},
+	OP_SWAP:             {"OP_SWAP", 1},
 	OP_JUMP:             {"OP_JUMP", 3},
 	OP_JUMP_IF_FALSE:    {"OP_JUMP_IF_FALSE", 3},
 	OP_LOOP:             {"OP_LOOP", 3},
@@ -209,9 +217,17 @@ func (chunk *Chunk) disassembleInstruction(offset int, w io.Writer) int {
 		chunk.simpleInstruction(instr.String(), w)
 	case OP_EQ:
 		chunk.simpleInstruction(instr.String(), w)
+	case OP_LESS:
+		chunk.simpleInstruction(instr.String(), w)
+	case OP_LESS_EQ:
+		chunk.simpleInstruction(instr.String(), w)
+	case OP_NOT:
+		chunk.simpleInstruction(instr.String(), w)
 	case OP_ADD:
 		chunk.simpleInstruction(instr.String(), w)
 	case OP_POP:
+		chunk.simpleInstruction(instr.String(), w)
+	case OP_SWAP:
 		chunk.simpleInstruction(instr.String(), w)
 	case OP_JUMP:
 		chunk.jumpInstruction(instr.String(), offset, w)

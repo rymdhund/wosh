@@ -82,7 +82,7 @@ func (vm *VM) NewFrame(cl *ClosureValue, args []Value, returnFrame *CallFrame, r
 	return frame
 }
 
-func (vm *VM) interpret(main *FunctionValue) (Value, error) {
+func (vm *VM) Interpret(main *FunctionValue) (Value, error) {
 	vm.frameCount = 0
 	frame := vm.NewFrame(NewClosure(main, []*BoxValue{}), []Value{}, nil, -1)
 	vm.currentFrame = frame
@@ -197,8 +197,24 @@ func (vm *VM) run() (Value, error) {
 			if doCall {
 				vm.opCall(2)
 			}
+		case OP_LESS_EQ:
+			panic("Not implemented")
+		case OP_NOT:
+			doCall, err := frame.opNot()
+			if err != nil {
+				return nil, err
+			}
+			if doCall {
+				vm.opCall(2)
+			}
 		case OP_POP:
 			frame.popStack()
+		case OP_SWAP:
+			// TODO: optimize
+			a := frame.popStack()
+			b := frame.popStack()
+			frame.pushStack(a)
+			frame.pushStack(b)
 		case OP_JUMP:
 			offset := frame.readUint16()
 			frame.ip += int(offset)
@@ -322,6 +338,18 @@ func (frame *CallFrame) opLess() (bool, error) {
 		frame.pushStack(a)
 		frame.pushStack(b)
 		return true, nil
+	}
+	return false, nil
+}
+
+func (frame *CallFrame) opNot() (bool, error) {
+	a := frame.popStack()
+
+	switch l := a.(type) {
+	case *BoolValue:
+		frame.pushStack(NewBool(!l.Val))
+	default:
+		return false, fmt.Errorf("Trying to not %s", a.Type().Name)
 	}
 	return false, nil
 }

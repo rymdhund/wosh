@@ -405,6 +405,13 @@ func assertTrue(t *testing.T, prog string) {
 	}
 }
 
+func assertInt(t *testing.T, prog string, value int) {
+	res := run(t, prog)
+	if !Equal(res, NewInt(value)) {
+		t.Errorf("expected %d, got %s", value, res)
+	}
+}
+
 func TestCompare(t *testing.T) {
 	assertFalse(t, "1 > 2")
 	assertFalse(t, "1 > 1")
@@ -447,4 +454,9 @@ func TestBool(t *testing.T) {
 	assertFalse(t, "true && false")
 	assertFalse(t, "false && true")
 	assertFalse(t, "false && false")
+}
+
+func TestList(t *testing.T) {
+	assertInt(t, "[1, 2][0]", 1)
+	assertInt(t, "[1, 2][1]", 2)
 }

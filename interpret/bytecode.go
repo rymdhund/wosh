@@ -41,8 +41,11 @@ const (
 	OP_PUT_SLOT         // put top of stack into indexed stack slot
 	OP_PUT_SLOT_HEAP    // put top of stack into pointer at indexed stack slot
 	OP_PUT_GLOBAL_NAME  // put top of stack into global using the indexed name
-	OP_ADD
-	OP_CALL
+
+	OP_ADD              // add top two elements on stack
+	OP_SUBSCRIPT_BINARY //takes binary subscript. Takes two stack arguments, pushes result
+	OP_CALL             // takes one parameter: arity top of stack is supposed to be : [..., fn_obj, arg1, arg2].  Puts the result back on top of stack
+	OP_CREATE_LIST      // takes one parameter: length of stack and pops that many elements from stack and builds a list of them
 
 	// Set closure on top of stack to handler for effect with name given by op-param
 	OP_SET_HANDLER
@@ -86,7 +89,9 @@ var op_names = []struct {
 	OP_PUT_SLOT_HEAP:    {"OP_PUT_SLOT_HEAP", 2},
 	OP_PUT_GLOBAL_NAME:  {"OP_PUT_GLOBAL_NAME", 2},
 	OP_ADD:              {"OP_ADD", 1},
+	OP_SUBSCRIPT_BINARY: {"OP_SUBSCRIPT_BINARY", 1},
 	OP_CALL:             {"OP_CALL", 2},
+	OP_CREATE_LIST:      {"OP_CREATE_LIST", 2},
 	OP_SET_HANDLER:      {"OP_SET_HANDLER", 4},
 	OP_POP_HANDLERS:     {"OP_POP_HANDLERS", 2},
 	OP_DO:               {"OP_DO", 2},
@@ -233,6 +238,8 @@ func (chunk *Chunk) disassembleInstruction(offset int, w io.Writer) int {
 		chunk.simpleInstruction(instr.String(), w)
 	case OP_ADD:
 		chunk.simpleInstruction(instr.String(), w)
+	case OP_SUBSCRIPT_BINARY:
+		chunk.simpleInstruction(instr.String(), w)
 	case OP_POP:
 		chunk.simpleInstruction(instr.String(), w)
 	case OP_SWAP:
@@ -253,6 +260,8 @@ func (chunk *Chunk) disassembleInstruction(offset int, w io.Writer) int {
 		chunk.loadNameInstruction(instr.String(), offset, w)
 	case OP_CALL:
 		chunk.callInstruction(instr.String(), offset, w)
+	case OP_CREATE_LIST:
+		chunk.createListInstruction(instr.String(), offset, w)
 	case OP_SET_HANDLER:
 		chunk.setHandler(instr.String(), offset, w)
 	case OP_POP_HANDLERS | OP_DO:
@@ -300,6 +309,11 @@ func (chunk *Chunk) slotInstruction(name string, offset int, w io.Writer) {
 func (chunk *Chunk) callInstruction(name string, offset int, w io.Writer) {
 	arity := chunk.Code[offset+1]
 	fmt.Fprintf(w, "%-20s %4d\n", name, arity)
+}
+
+func (chunk *Chunk) createListInstruction(name string, offset int, w io.Writer) {
+	size := chunk.Code[offset+1]
+	fmt.Fprintf(w, "%-20s %4d\n", name, size)
 }
 
 func (chunk *Chunk) setHandler(name string, offset int, w io.Writer) {

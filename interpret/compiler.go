@@ -204,13 +204,13 @@ func (c *Compiler) CompileExpr(exp ast.Expr) error {
 		return c.CompileExpr(v.Inside)
 	case *ast.UnaryExpr:
 		return c.CompileUnaryExpr(v)
+	case *ast.ListExpr:
+		return c.CompileListExpr(v)
 	/*
-		case *ast.ListExpr:
-			return runner.RunListExpr(env, v)
+		case *ast.SubscrExpr:
+			return c.CompileOpExpr(v)
 		case *ast.MapExpr:
 			return runner.RunMapExpr(env, v)
-		case *ast.SubscrExpr:
-			return runner.RunSubscrExpr(env, v)
 		case *ast.AttrExpr:
 			return runner.RunAttrExpr(env, v)
 		case *ast.ForExpr:
@@ -341,6 +341,8 @@ func (c *Compiler) CompileOpExpr(op *ast.OpExpr) error {
 		c.chunk.addOp1(OP_AND, op.Pos().Line)
 	case "||":
 		c.chunk.addOp1(OP_OR, op.Pos().Line)
+	case "[]":
+		c.chunk.addOp1(OP_SUBSCRIPT_BINARY, op.Pos().Line)
 		//	case "::":
 		//		return builtin.Cons(o1, o2), NoExnVal
 	default:
@@ -359,13 +361,26 @@ func (c *Compiler) CompileUnaryExpr(op *ast.UnaryExpr) error {
 		c.chunk.addOp1(OP_NOT, op.Pos().Line)
 		//	case "-":
 		//		return builtin.Sub(o1, o2), NoExnVal
-		//	case "*":
-		//		return builtin.Mult(o1, o2), NoExnVal
-		//	case "/":
-		//		return builtin.Div(o1, o2), NoExnVal
 	default:
 		panic(fmt.Sprintf("Not implement operator '%s'", op.Op))
 	}
+	return nil
+}
+
+func (c *Compiler) CompileListExpr(lst *ast.ListExpr) error {
+	for _, elem := range lst.Elems {
+		err := c.CompileExpr(elem)
+		if err != nil {
+			return err
+		}
+	}
+	size := len(lst.Elems)
+	if size > 255 {
+		panic("Too long list")
+	}
+
+	c.chunk.addOp2(OP_CREATE_LIST, Op(uint8(size)), lst.Pos().Line)
+
 	return nil
 }
 

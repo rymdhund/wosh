@@ -378,7 +378,11 @@ func (p *Parser) parsePrimary() (ast.Expr, bool) {
 		}
 		elems, ok := p.parseSubscrExpr()
 		if ok {
-			expr = &ast.SubscrExpr{expr, elems}
+			if len(elems) == 1 {
+				expr = &ast.OpExpr{expr, elems[0], "[]"}
+			} else {
+				expr = &ast.SubscrExpr{expr, elems}
+			}
 			continue
 		}
 		break

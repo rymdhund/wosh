@@ -214,6 +214,14 @@ func (vm *VM) run() (Value, error) {
 			if err != nil {
 				return nil, err
 			}
+		case OP_SUBSCRIPT_BINARY:
+			err := frame.opSubscr()
+			if err != nil {
+				return nil, err
+			}
+		case OP_CREATE_LIST:
+			size := int(frame.readCode())
+			frame.opCreateList(size)
 		case OP_POP:
 			frame.popStack()
 		case OP_SWAP:
@@ -397,6 +405,28 @@ func (frame *CallFrame) opOr() error {
 	return nil
 }
 
+func (frame *CallFrame) opSubscr() error {
+	b := frame.popStack()
+	a := frame.popStack()
+
+	switch l := a.(type) {
+	case *ListValue:
+		r, ok := b.(*IntValue)
+		if !ok {
+			return fmt.Errorf("Trying to subscript %s with %s", a.Type().Name, b.Type().Name)
+		} else {
+			val, ok := l.Get(r.Val)
+			if !ok {
+				return fmt.Errorf("List index out of bounds")
+			}
+			frame.pushStack(val)
+		}
+	default:
+		return fmt.Errorf("Trying to subscript %s with %s", a.Type().Name, b.Type().Name)
+	}
+	return nil
+}
+
 // return true if we need to call a function afterwards
 func (frame *CallFrame) opAdd() (bool, error) {
 	b := frame.popStack()
@@ -431,6 +461,14 @@ func (frame *CallFrame) opAdd() (bool, error) {
 		return true, nil
 	}
 	return false, nil
+}
+
+func (frame *CallFrame) opCreateList(size int) {
+	v := ListNil()
+	for i := 0; i < size; i++ {
+		v = ListCons(frame.popStack(), v)
+	}
+	frame.pushStack(v)
 }
 
 func (vm *VM) opCall(arity int) {

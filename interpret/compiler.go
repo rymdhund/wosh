@@ -147,7 +147,7 @@ func compileFunctionFromBlock(name string, params []*ast.ParamExpr, block *ast.B
 
 func (c *Compiler) CompileBlockExpr(block *ast.BlockExpr) error {
 	if DEBUG {
-		c.chunk.addNopComment("block expr starts", block.Pos().Line)
+		//c.chunk.addNopComment("block expr starts", block.Pos().Line)
 	}
 	for i, expr := range block.Children {
 		err := c.CompileExpr(expr)
@@ -169,7 +169,7 @@ func (c *Compiler) CompileBlockExpr(block *ast.BlockExpr) error {
 		}
 	}
 	if DEBUG {
-		c.chunk.addNopComment("block expr end", block.Pos().Line)
+		//c.chunk.addNopComment("block expr end", block.Pos().Line)
 	}
 	return nil
 }
@@ -206,9 +206,9 @@ func (c *Compiler) CompileExpr(exp ast.Expr) error {
 		return c.CompileUnaryExpr(v)
 	case *ast.ListExpr:
 		return c.CompileListExpr(v)
+	case *ast.SubscrExpr:
+		return c.CompileSubSlice(v)
 	/*
-		case *ast.SubscrExpr:
-			return c.CompileOpExpr(v)
 		case *ast.MapExpr:
 			return runner.RunMapExpr(env, v)
 		case *ast.AttrExpr:
@@ -343,8 +343,8 @@ func (c *Compiler) CompileOpExpr(op *ast.OpExpr) error {
 		c.chunk.addOp1(OP_OR, op.Pos().Line)
 	case "[]":
 		c.chunk.addOp1(OP_SUBSCRIPT_BINARY, op.Pos().Line)
-		//	case "::":
-		//		return builtin.Cons(o1, o2), NoExnVal
+	case "::":
+		c.chunk.addOp1(OP_CONS, op.Pos().Line)
 	default:
 		panic(fmt.Sprintf("Not implement operator '%s'", op.Op))
 	}
@@ -381,6 +381,28 @@ func (c *Compiler) CompileListExpr(lst *ast.ListExpr) error {
 
 	c.chunk.addOp2(OP_CREATE_LIST, Op(uint8(size)), lst.Pos().Line)
 
+	return nil
+}
+
+func (c *Compiler) CompileSubSlice(slice *ast.SubscrExpr) error {
+	c.CompileExpr(slice.Lhs)
+
+	for _, elem := range slice.Sub {
+		_, ok := elem.(*ast.EmptyExpr)
+		if ok {
+			c.chunk.addOp1(OP_NIL, slice.Pos().Line)
+		} else {
+			err := c.CompileExpr(elem)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	// make sure we have three arguments
+	for i := len(slice.Sub); i < 3; i++ {
+		c.chunk.addOp1(OP_NIL, slice.Pos().Line)
+	}
+	c.chunk.addOp1(OP_SUB_SLICE, slice.Pos().Line)
 	return nil
 }
 
@@ -486,15 +508,29 @@ func (c *Compiler) CompileCallExpr(call *ast.CallExpr) error {
 		c.chunk.addOp2(OP_CALL, Op(len(call.Args)), call.Pos().Line)
 		return nil
 	}
-	panic("Not implemented call")
 
-	/*
-		// method
-		attr, ok := call.Lhs.(*ast.AttrExpr)
-		if ok {
-			return runner.RunCallMethod(env, call, attr)
+	attr, ok := call.Lhs.(*ast.AttrExpr)
+	if ok {
+		// Method call
+		err := c.CompileExpr(attr.Lhs)
+		if err != nil {
+			return err
 		}
 
+		for _, expr := range call.Args {
+			err := c.CompileExpr(expr)
+			if err != nil {
+				return err
+			}
+		}
+		nameId := c.getOrSetName(attr.Attr.Name)
+		c.chunk.addOp3(OP_CALL_METHOD, Op(len(call.Args)), Op(nameId), call.Pos().Line)
+		return nil
+	}
+
+	panic("not implemented first class function")
+
+	/*
 		// first class function somehow
 		o, exn := runner.RunExpr(env, call.Lhs)
 		if exn != NoExnVal {
@@ -655,7 +691,6 @@ func (c *Compiler) CompileIfExpr(iff *ast.IfExpr) error {
 		c.makeRelativeJump2(c.chunk.currentPos())
 		c.makeRelativeJump2(elseIdx)
 	} else {
-		c.chunk.addNopComment("foo", iff.TPos.Line)
 		c.chunk.addOp1(OP_POP, iff.TPos.Line)
 		c.makeRelativeJump2(c.chunk.currentPos())
 		c.chunk.addOp1(OP_NIL, iff.TPos.Line)

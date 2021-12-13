@@ -189,6 +189,19 @@ func (vm *VM) run() (Value, error) {
 			if doCall {
 				vm.opCall(2)
 			}
+		case OP_CONS:
+			doCall, err := frame.opCons()
+			if err != nil {
+				return nil, err
+			}
+			if doCall {
+				vm.opCall(2)
+			}
+		case OP_SUB_SLICE:
+			err := frame.opSubSlice()
+			if err != nil {
+				return nil, err
+			}
 		case OP_LESS:
 			doCall, err := frame.opLess()
 			if err != nil {
@@ -275,6 +288,10 @@ func (vm *VM) run() (Value, error) {
 		case OP_CALL:
 			arity := int(frame.readCode())
 			vm.opCall(arity)
+		case OP_CALL_METHOD:
+			arity := int(frame.readCode())
+			method := frame.readName()
+			vm.opCallMethod(arity, method)
 		case OP_SET_HANDLER:
 			effect := frame.readName()
 			handlerIp := frame.readUint16()
@@ -463,6 +480,69 @@ func (frame *CallFrame) opAdd() (bool, error) {
 	return false, nil
 }
 
+func (frame *CallFrame) opCons() (bool, error) {
+	b := frame.popStack()
+	a := frame.popStack()
+	fmt.Printf("Trying to cons %s and %s", a.Type().Name, b.Type().Name)
+	switch l := b.(type) {
+	case *ListValue:
+		frame.pushStack(ListCons(a, l))
+	default:
+		fmt.Printf("WDF\n")
+		// cons operator is right associative
+		frame.pushStack(a.Type().Methods["cons"])
+		frame.pushStack(b)
+		frame.pushStack(a)
+		return true, nil
+	}
+	return false, nil
+}
+
+func (frame *CallFrame) opSubSlice() error {
+	c := frame.popStack()
+	b := frame.popStack()
+	a := frame.popStack()
+	lst, ok := frame.popStack().(*ListValue)
+	if !ok {
+		panic("Subslice on non-list")
+	}
+
+	var from *IntValue
+	var to *IntValue
+	var step *IntValue
+
+	switch i := a.(type) {
+	case *IntValue:
+		from = i
+	case *NilValue:
+		from = NewInt(0)
+	default:
+		panic("First element in subslice is not integer")
+	}
+
+	switch i := b.(type) {
+	case *IntValue:
+		to = i
+	case *NilValue:
+		to = NewInt(lst.len)
+	default:
+		panic("Second element in subslice is not integer")
+	}
+
+	switch i := c.(type) {
+	case *IntValue:
+		step = i
+	case *NilValue:
+		step = NewInt(1)
+	default:
+		panic("Second element in subslice is not integer")
+	}
+
+	newList := lst.Slice(from, to, step)
+	frame.pushStack(newList)
+	return nil
+}
+
 func (frame *CallFrame) opCreateList(size int) {
 	v := ListNil()
 	for i := 0; i < size; i++ {
@@ -476,6 +556,22 @@ func (vm *VM) opCall(arity int) {
 	fn := frame.peekStack(arity).(*ClosureValue)
 
 	newFrame := vm.NewFrame(fn, frame.stack[frame.stackTop-arity:frame.stackTop], frame, frame.ip)
+	vm.currentFrame = newFrame
+	frame.stackTop -= arity + 1
+}
+
+func (vm *VM) opCallMethod(arity int, name string) {
+	frame := vm.currentFrame
+	obj := frame.peekStack(arity)
+
+	method, ok := obj.Type().Methods[name]
+	if !ok {
+		panic(fmt.Sprintf("No such method: %s", name))
+	}
+
+	closure := NewClosure(method, []*BoxValue{})
+	// Include object on stack
+	newFrame := vm.NewFrame(closure, frame.stack[frame.stackTop-arity-1:frame.stackTop], frame, frame.ip)
 	vm.currentFrame = newFrame
 	frame.stackTop -= arity + 1
 }

@@ -308,9 +308,11 @@ func (p *Parser) parseCompExpr() (ast.Expr, bool) {
 }
 
 // ConsExpr ->
-//   | AddExpr (<add_op> AddExpr)*
+//   | AddExpr <cons_op> ConsExpr
+//   | AddExpr
 func (p *Parser) parseConsExpr() (ast.Expr, bool) {
-	return p.parseBinaryOpExpr([]string{"::"}, p.parseAddExpr)
+	//return p.parseBinaryOpExpr([]string{"::"}, p.parseAddExpr)
+	return p.parseBinaryOpRightAssocExpr([]string{"::"}, p.parseAddExpr)
 }
 
 // AddExpr ->
@@ -1168,4 +1170,42 @@ func (p *Parser) parseBinaryOpExpr(operators []string, subParser func() (ast.Exp
 		}
 	}
 	panic("unreachable")
+}
+
+// | <sub> <op> <this>
+// | <sub>
+func (p *Parser) parseBinaryOpRightAssocExpr(operators []string, subParser func() (ast.Expr, bool)) (ast.Expr, bool) {
+	p.tokens.begin()
+
+	expr, ok := subParser()
+	if !ok {
+		p.tokens.rollback()
+		return nil, false
+	}
+
+	op := p.tokens.peek()
+	litMatch := false
+	for _, oper := range operators {
+		if op.Lit == oper {
+			litMatch = true
+		}
+
+	}
+	if op.Tok != lexer.OP || !litMatch {
+		p.tokens.commit()
+		return expr, true
+	}
+
+	p.tokens.pop()
+	right, ok := p.parseBinaryOpRightAssocExpr(operators, subParser)
+	if ok {
+		expr = &ast.OpExpr{expr, right, op.Lit}
+		p.tokens.commit()
+		return expr, true
+	} else {
+		// Continue parsing anyway
+		p.error(fmt.Sprintf("Expected an expression after this '%s'", op.Lit), op.Pos)
+		p.tokens.commit()
+		return &ast.Bad{op.Pos}, true
+	}
 }

@@ -25,6 +25,12 @@ const (
 	OP_AND     // And top two elements on stack
 	OP_OR      // Or top two elements on stack
 
+	// Binary operators, takens two stack elements and returns one
+	OP_ADD
+	OP_SUBSCRIPT_BINARY
+	OP_CONS
+	OP_SUB_SLICE // Pop 4 values from stack, the lowest should be a list
+
 	OP_POP
 	OP_SWAP // swap top two elements on stack
 
@@ -42,10 +48,15 @@ const (
 	OP_PUT_SLOT_HEAP    // put top of stack into pointer at indexed stack slot
 	OP_PUT_GLOBAL_NAME  // put top of stack into global using the indexed name
 
-	OP_ADD              // add top two elements on stack
-	OP_SUBSCRIPT_BINARY //takes binary subscript. Takes two stack arguments, pushes result
-	OP_CALL             // takes one parameter: arity top of stack is supposed to be : [..., fn_obj, arg1, arg2].  Puts the result back on top of stack
-	OP_CREATE_LIST      // takes one parameter: length of stack and pops that many elements from stack and builds a list of them
+	// Takes one parameter: arity top of stack is supposed to be : [..., fn_obj, arg1, arg2].  Puts the result back on top of stack
+	OP_CALL
+
+	// Takes two parameters: Arity and Name of method
+	// Will look up method with 'name' on an object and call that
+	// Top of stack is supposed to be : [..., obj, arg1, arg2]
+	OP_CALL_METHOD
+	// takes one parameter: length of stack and pops that many elements from stack and builds a list of them
+	OP_CREATE_LIST
 
 	// Set closure on top of stack to handler for effect with name given by op-param
 	OP_SET_HANDLER
@@ -90,7 +101,10 @@ var op_names = []struct {
 	OP_PUT_GLOBAL_NAME:  {"OP_PUT_GLOBAL_NAME", 2},
 	OP_ADD:              {"OP_ADD", 1},
 	OP_SUBSCRIPT_BINARY: {"OP_SUBSCRIPT_BINARY", 1},
+	OP_CONS:             {"OP_CONS", 1},
+	OP_SUB_SLICE:        {"OP_SUB_SLICE", 1},
 	OP_CALL:             {"OP_CALL", 2},
+	OP_CALL_METHOD:      {"OP_CALL_METHOD", 3},
 	OP_CREATE_LIST:      {"OP_CREATE_LIST", 2},
 	OP_SET_HANDLER:      {"OP_SET_HANDLER", 4},
 	OP_POP_HANDLERS:     {"OP_POP_HANDLERS", 2},
@@ -236,7 +250,7 @@ func (chunk *Chunk) disassembleInstruction(offset int, w io.Writer) int {
 		chunk.simpleInstruction(instr.String(), w)
 	case OP_OR:
 		chunk.simpleInstruction(instr.String(), w)
-	case OP_ADD:
+	case OP_ADD, OP_CONS, OP_SUB_SLICE:
 		chunk.simpleInstruction(instr.String(), w)
 	case OP_SUBSCRIPT_BINARY:
 		chunk.simpleInstruction(instr.String(), w)
@@ -260,6 +274,8 @@ func (chunk *Chunk) disassembleInstruction(offset int, w io.Writer) int {
 		chunk.loadNameInstruction(instr.String(), offset, w)
 	case OP_CALL:
 		chunk.callInstruction(instr.String(), offset, w)
+	case OP_CALL_METHOD:
+		chunk.callMethodInstruction(instr.String(), offset, w)
 	case OP_CREATE_LIST:
 		chunk.createListInstruction(instr.String(), offset, w)
 	case OP_SET_HANDLER:
@@ -279,7 +295,7 @@ func (chunk *Chunk) simpleInstruction(name string, w io.Writer) {
 func (chunk *Chunk) constantInstruction(name string, offset int, w io.Writer) {
 	constIdx := chunk.Code[offset+1]
 	constant := chunk.Constants[constIdx]
-	fmt.Fprintf(w, "%-20s %4d '%s'\n", name, constIdx, constant)
+	fmt.Fprintf(w, "%-20s (idx=%d) [value='%s']\n", name, constIdx, constant)
 }
 
 func (chunk *Chunk) jumpInstruction(name string, offset int, w io.Writer) {
@@ -311,9 +327,16 @@ func (chunk *Chunk) callInstruction(name string, offset int, w io.Writer) {
 	fmt.Fprintf(w, "%-20s %4d\n", name, arity)
 }
 
+func (chunk *Chunk) callMethodInstruction(name string, offset int, w io.Writer) {
+	arity := chunk.Code[offset+1]
+	methodNameIdx := chunk.Code[offset+2]
+	methodName := chunk.Names[methodNameIdx]
+	fmt.Fprintf(w, "%-20s (arity=%d, method='%s'(%d))\n", name, arity, methodName, methodNameIdx)
+}
+
 func (chunk *Chunk) createListInstruction(name string, offset int, w io.Writer) {
 	size := chunk.Code[offset+1]
-	fmt.Fprintf(w, "%-20s %4d\n", name, size)
+	fmt.Fprintf(w, "%-20s (size=%d)\n", name, size)
 }
 
 func (chunk *Chunk) setHandler(name string, offset int, w io.Writer) {

@@ -412,6 +412,18 @@ func assertInt(t *testing.T, prog string, value int) {
 	}
 }
 
+func TestArithmetic(t *testing.T) {
+	assertInt(t, "1 + 1", 2)
+	assertInt(t, "1 * 1", 1)
+	assertInt(t, "1 - 1", 0)
+	assertInt(t, "1 / 1", 1)
+
+	assertInt(t, "1 + 2 * 3", 7)
+	assertInt(t, "2 * 3 + 4", 10)
+
+	assertInt(t, "1 + 2 * 3 - 4 / 2", 5)
+}
+
 func TestCompare(t *testing.T) {
 	assertFalse(t, "1 > 2")
 	assertFalse(t, "1 > 1")
@@ -467,4 +479,16 @@ func TestList(t *testing.T) {
 	assertInt(t, "[1, 2, 3][1:][1]", 3)
 	assertInt(t, "[1, 2, 3][:2][0]", 1)
 	assertInt(t, "[1, 2, 3][:2][1]", 2)
+}
+
+func TestMethodDef(t *testing.T) {
+	assertInt(
+		t,
+		`
+	fn (lst: List) head() {
+		lst[0]
+	}
+
+	[1, 2].head()`,
+		1)
 }

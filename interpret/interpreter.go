@@ -189,6 +189,30 @@ func (vm *VM) run() (Value, error) {
 			if doCall {
 				vm.opCall(2)
 			}
+		case OP_SUB:
+			doCall, err := frame.opSub()
+			if err != nil {
+				return nil, err
+			}
+			if doCall {
+				vm.opCall(2)
+			}
+		case OP_MULT:
+			doCall, err := frame.opMult()
+			if err != nil {
+				return nil, err
+			}
+			if doCall {
+				vm.opCall(2)
+			}
+		case OP_DIV:
+			doCall, err := frame.opDiv()
+			if err != nil {
+				return nil, err
+			}
+			if doCall {
+				vm.opCall(2)
+			}
 		case OP_CONS:
 			doCall, err := frame.opCons()
 			if err != nil {
@@ -285,6 +309,12 @@ func (vm *VM) run() (Value, error) {
 		case OP_PUT_GLOBAL_NAME:
 			name := frame.readName()
 			vm.globals[name] = frame.popStack()
+		case OP_SET_METHOD:
+			class := frame.readName()
+			method := frame.readName()
+			// TODO: make this part of the vm
+			closure := frame.popStack().(*ClosureValue)
+			types[class].Methods[method] = closure.Function
 		case OP_CALL:
 			arity := int(frame.readCode())
 			vm.opCall(arity)
@@ -473,6 +503,69 @@ func (frame *CallFrame) opAdd() (bool, error) {
 		}
 	default:
 		frame.pushStack(a.Type().Methods["add"])
+		frame.pushStack(a)
+		frame.pushStack(b)
+		return true, nil
+	}
+	return false, nil
+}
+
+func (frame *CallFrame) opMult() (bool, error) {
+	b := frame.popStack()
+	a := frame.popStack()
+
+	switch l := a.(type) {
+	case *IntValue:
+		r, ok := b.(*IntValue)
+		if !ok {
+			return false, fmt.Errorf("Trying to mult %s and %s", a.Type().Name, b.Type().Name)
+		} else {
+			frame.pushStack(NewInt(l.Val * r.Val))
+		}
+	default:
+		frame.pushStack(a.Type().Methods["mult"])
+		frame.pushStack(a)
+		frame.pushStack(b)
+		return true, nil
+	}
+	return false, nil
+}
+
+func (frame *CallFrame) opSub() (bool, error) {
+	b := frame.popStack()
+	a := frame.popStack()
+
+	switch l := a.(type) {
+	case *IntValue:
+		r, ok := b.(*IntValue)
+		if !ok {
+			return false, fmt.Errorf("Trying to sub %s and %s", a.Type().Name, b.Type().Name)
+		} else {
+			frame.pushStack(NewInt(l.Val - r.Val))
+		}
+	default:
+		frame.pushStack(a.Type().Methods["sub"])
+		frame.pushStack(a)
+		frame.pushStack(b)
+		return true, nil
+	}
+	return false, nil
+}
+
+func (frame *CallFrame) opDiv() (bool, error) {
+	b := frame.popStack()
+	a := frame.popStack()
+
+	switch l := a.(type) {
+	case *IntValue:
+		r, ok := b.(*IntValue)
+		if !ok {
+			return false, fmt.Errorf("Trying to div %s and %s", a.Type().Name, b.Type().Name)
+		} else {
+			frame.pushStack(NewInt(l.Val / r.Val))
+		}
+	default:
+		frame.pushStack(a.Type().Methods["sub"])
 		frame.pushStack(a)
 		frame.pushStack(b)
 		return true, nil

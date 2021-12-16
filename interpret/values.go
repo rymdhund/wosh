@@ -30,6 +30,21 @@ var ExceptionType = &Type{"Exception", FunctionMap{}}
 var BoxType = &Type{"Box", FunctionMap{}}
 var ContinuationType = &Type{"Continuation", FunctionMap{}}
 
+var types = map[string]*Type{
+	"Nil":  NilType,
+	"Bool": BoolType,
+	"Int":  IntType,
+	"Str":  StringType,
+	"List": ListType,
+	"Map":  MapType,
+	// We don't expose these yet:
+	// "Function"
+	// "Closure"
+	// "Exception"
+	// "Box"
+	// "Continuation"
+}
+
 type Value interface {
 	Type() *Type
 	String() string

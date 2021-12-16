@@ -97,7 +97,11 @@ func Compile(function *ast.FuncDefExpr) (*FunctionValue, error) {
 }
 
 func compileFunction(function *ast.FuncDefExpr, prev *Compiler) (*FunctionValue, error) {
-	return compileFunctionFromBlock(function.Ident.Name, function.Params, function.Body, prev)
+	params := function.Params
+	if function.ClassParam != nil {
+		params = append([]*ast.ParamExpr{function.ClassParam}, params...)
+	}
+	return compileFunctionFromBlock(function.Ident.Name, params, function.Body, prev)
 }
 
 func compileFunctionFromBlock(name string, params []*ast.ParamExpr, block *ast.BlockExpr, prev *Compiler) (*FunctionValue, error) {
@@ -313,12 +317,12 @@ func (c *Compiler) CompileOpExpr(op *ast.OpExpr) error {
 	switch op.Op {
 	case "+":
 		c.chunk.addOp1(OP_ADD, op.Pos().Line)
-		//	case "-":
-		//		return builtin.Sub(o1, o2), NoExnVal
-		//	case "*":
-		//		return builtin.Mult(o1, o2), NoExnVal
-		//	case "/":
-		//		return builtin.Div(o1, o2), NoExnVal
+	case "-":
+		c.chunk.addOp1(OP_SUB, op.Pos().Line)
+	case "*":
+		c.chunk.addOp1(OP_MULT, op.Pos().Line)
+	case "/":
+		c.chunk.addOp1(OP_DIV, op.Pos().Line)
 	case "==":
 		c.chunk.addOp1(OP_EQ, op.Pos().Line)
 	case "!=":
@@ -546,15 +550,21 @@ func (c *Compiler) CompileFuncDefExpr(fn *ast.FuncDefExpr) error {
 		return err
 	}
 
-	if fn.ClassParam != nil {
-		panic("not implemented")
-	} else {
-		constId := c.chunk.addConst(fnValue)
-		nameId := c.getOrSetName(fn.Ident.Name)
-		c.chunk.addOp2(OP_MAKE_CLOSURE, constId, fn.Pos().Line)
+	constId := c.chunk.addConst(fnValue)
+	nameId := c.getOrSetName(fn.Ident.Name)
+	c.chunk.addOp2(OP_MAKE_CLOSURE, constId, fn.Pos().Line)
+
+	if fn.ClassParam == nil {
 		c.chunk.addOp2(OP_PUT_GLOBAL_NAME, Op(nameId), fn.Pos().Line)
-		c.chunk.addOp1(OP_NIL, fn.Pos().Line)
+	} else {
+		if len(fnValue.CaptureSlots) > 0 {
+			panic("No capture slots expected in method!")
+		}
+		classNameId := c.getOrSetName(fn.ClassParam.Type.Name)
+		c.chunk.addOp3(OP_SET_METHOD, Op(classNameId), Op(nameId), fn.Pos().Line)
 	}
+
+	c.chunk.addOp1(OP_NIL, fn.Pos().Line)
 	return nil
 }
 

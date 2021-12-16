@@ -27,6 +27,9 @@ const (
 
 	// Binary operators, takens two stack elements and returns one
 	OP_ADD
+	OP_SUB
+	OP_MULT
+	OP_DIV
 	OP_SUBSCRIPT_BINARY
 	OP_CONS
 	OP_SUB_SLICE // Pop 4 values from stack, the lowest should be a list
@@ -47,6 +50,7 @@ const (
 	OP_PUT_SLOT         // put top of stack into indexed stack slot
 	OP_PUT_SLOT_HEAP    // put top of stack into pointer at indexed stack slot
 	OP_PUT_GLOBAL_NAME  // put top of stack into global using the indexed name
+	OP_SET_METHOD       // takes name of class and name of method as params
 
 	// Takes one parameter: arity top of stack is supposed to be : [..., fn_obj, arg1, arg2].  Puts the result back on top of stack
 	OP_CALL
@@ -99,7 +103,11 @@ var op_names = []struct {
 	OP_PUT_SLOT:         {"OP_PUT_SLOT", 2},
 	OP_PUT_SLOT_HEAP:    {"OP_PUT_SLOT_HEAP", 2},
 	OP_PUT_GLOBAL_NAME:  {"OP_PUT_GLOBAL_NAME", 2},
+	OP_SET_METHOD:       {"OP_SET_METHOD", 3},
 	OP_ADD:              {"OP_ADD", 1},
+	OP_SUB:              {"OP_SUB", 1},
+	OP_MULT:             {"OP_MULT", 1},
+	OP_DIV:              {"OP_DIV", 1},
 	OP_SUBSCRIPT_BINARY: {"OP_SUBSCRIPT_BINARY", 1},
 	OP_CONS:             {"OP_CONS", 1},
 	OP_SUB_SLICE:        {"OP_SUB_SLICE", 1},
@@ -272,6 +280,8 @@ func (chunk *Chunk) disassembleInstruction(offset int, w io.Writer) int {
 		chunk.slotInstruction(instr.String(), offset, w)
 	case OP_PUT_GLOBAL_NAME:
 		chunk.loadNameInstruction(instr.String(), offset, w)
+	case OP_SET_METHOD:
+		chunk.nameNameInstruction(instr.String(), offset, w, "class", "method")
 	case OP_CALL:
 		chunk.callInstruction(instr.String(), offset, w)
 	case OP_CALL_METHOD:
@@ -314,6 +324,14 @@ func (chunk *Chunk) loadNameInstruction(name string, offset int, w io.Writer) {
 	nameIdx := chunk.Code[offset+1]
 	namex := chunk.Names[nameIdx]
 	fmt.Fprintf(w, "%-20s %4d '%s'\n", name, nameIdx, namex)
+}
+
+func (chunk *Chunk) nameNameInstruction(op string, offset int, w io.Writer, label1, label2 string) {
+	name1Idx := chunk.Code[offset+1]
+	name2Idx := chunk.Code[offset+2]
+	name1 := chunk.Names[name1Idx]
+	name2 := chunk.Names[name2Idx]
+	fmt.Fprintf(w, "%-20s (%s='%s', %s='%s')\n", op, label1, name1, label2, name2)
 }
 
 func (chunk *Chunk) slotInstruction(name string, offset int, w io.Writer) {

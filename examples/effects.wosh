@@ -1,0 +1,23 @@
+fn count() {
+  do eff1(100)
+  do eff2(10)
+  3
+}
+
+fn foo() {
+  sum = 0
+  try {
+    count() + sum
+  } handle {
+    eff1(x) @ k -> {
+      sum = sum + x
+      resume k
+    }
+    eff2(x) @ k -> {
+      sum = sum + x
+      resume k
+    }
+  }
+}
+
+foo() # will return 113

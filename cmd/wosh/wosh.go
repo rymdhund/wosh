@@ -53,7 +53,7 @@ func runCompiled(block *ast.BlockExpr) {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-	fmt.Println("exited with %s", v.String())
+	fmt.Println("Exited with", v.String())
 }
 
 func runEval(block *ast.BlockExpr) {

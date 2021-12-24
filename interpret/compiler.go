@@ -56,7 +56,6 @@ func (c *Compiler) getOrCreateLocalVar(name string) uint8 {
 		currentScope := len(c.localLookupTables) - 1
 		c.localLookupTables[currentScope][name] = uint8(newIdx)
 		c.chunk.LocalNames = append(c.chunk.LocalNames, name)
-		fmt.Printf("Created local var '%s' on slot %d\n", name, newIdx)
 		return uint8(newIdx)
 	}
 	return idx
@@ -105,7 +104,9 @@ func compileFunction(function *ast.FuncDefExpr, prev *Compiler) (*FunctionValue,
 }
 
 func compileFunctionFromBlock(name string, params []*ast.ParamExpr, block *ast.BlockExpr, prev *Compiler) (*FunctionValue, error) {
-	fmt.Printf("Compiling %s\n", name)
+	if DEBUG_TRACE {
+		fmt.Printf("[DEBUG COMPILER] Compiling %s\n", name)
+	}
 	arity := len(params)
 	c := Compiler{
 		chunk:             NewChunk(),
@@ -144,15 +145,14 @@ func compileFunctionFromBlock(name string, params []*ast.ParamExpr, block *ast.B
 		SlotsToPutOnHeap: heapSlots,
 	}
 
-	function.DebugPrint()
+	if DEBUG_TRACE {
+		function.DebugPrint()
+	}
 
 	return function, nil
 }
 
 func (c *Compiler) CompileBlockExpr(block *ast.BlockExpr) error {
-	if DEBUG {
-		//c.chunk.addNopComment("block expr starts", block.Pos().Line)
-	}
 	for i, expr := range block.Children {
 		err := c.CompileExpr(expr)
 		if err != nil {
@@ -171,9 +171,6 @@ func (c *Compiler) CompileBlockExpr(block *ast.BlockExpr) error {
 			//}
 			c.chunk.addOp1(OP_POP, expr.Pos().Line)
 		}
-	}
-	if DEBUG {
-		//c.chunk.addNopComment("block expr end", block.Pos().Line)
 	}
 	return nil
 }
@@ -212,6 +209,8 @@ func (c *Compiler) CompileExpr(exp ast.Expr) error {
 		return c.CompileListExpr(v)
 	case *ast.SubscrExpr:
 		return c.CompileSubSlice(v)
+	case *ast.ReturnExpr:
+		return c.CompileReturnExpr(v)
 	/*
 		case *ast.MapExpr:
 			return runner.RunMapExpr(env, v)
@@ -268,7 +267,7 @@ func (c *Compiler) CompileExpr(exp ast.Expr) error {
 			return runner.RunCommandExpr(env, v)
 	*/
 	default:
-		panic(fmt.Sprintf("Not implemented expression in compiler: %+v", exp))
+		panic(fmt.Sprintf("Not implemented expression in compiler: %+v (line %d)", exp, exp.Pos().Line))
 	}
 }
 
@@ -441,23 +440,23 @@ func (c *Compiler) CaptureFromOuterScope(name string) (uint8, bool) {
 func (c *Compiler) CompileAssignExpr(assign *ast.AssignExpr) error {
 	c.CompileExpr(assign.Right)
 
-	fmt.Printf("compiling set %s\n", assign.Ident.Name)
-
 	slot, ok := c.lookupLocalVar(assign.Ident.Name)
-	if ok {
-		println("existing local")
+	if ok && DEBUG_TRACE {
+		fmt.Printf("[COMPILER DEBUG] Found local var %s\n", assign.Ident.Name)
 	}
 	if !ok {
 		slot, ok = c.CaptureFromOuterScope(assign.Ident.Name)
-		if ok {
-			println("existing outer")
+		if ok && DEBUG_TRACE {
+			fmt.Printf("[COMPILER DEBUG] Found outer var %s\n", assign.Ident.Name)
 		}
 	}
 
 	if !ok {
 		// make a new local variable
-		println("new local")
 		slot = c.getOrCreateLocalVar(assign.Ident.Name)
+		if DEBUG_TRACE {
+			fmt.Printf("[COMPILER DEBUG] Creating local var %s\n", assign.Ident.Name)
+		}
 	}
 
 	// local variable
@@ -592,10 +591,6 @@ func (c *Compiler) makeRelativeJump2(jumpDestIdx int) {
 		panic("Negative jump")
 	}
 
-	fmt.Printf("orig idx %d\n", idx+2)
-	fmt.Printf("jump idx %d\n", jumpDestIdx)
-	fmt.Printf("jump offset %d\n", offset)
-
 	c.chunk.Code[idx] = Op(uint8(offset >> 8))
 	c.chunk.Code[idx+1] = Op(uint8(offset))
 	c.placeHolders = c.placeHolders[:len(c.placeHolders)-1]
@@ -687,7 +682,6 @@ func (c *Compiler) CompileIfExpr(iff *ast.IfExpr) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("after then %d\n", c.chunk.currentPos())
 	if iff.Else != nil {
 		c.chunk.addOp3(OP_JUMP, Op(0x98), Op(0x76), iff.TPos.Line)
 		c.markJumpPlaceholder2()
@@ -775,4 +769,19 @@ func twoBytes(n int) (uint8, uint8) {
 		panic(fmt.Sprintf("Expected uint16, got %d", n))
 	}
 	return uint8((n >> 8) & 0xff), uint8(n & 0xff)
+}
+
+func (c *Compiler) CompileReturnExpr(ret *ast.ReturnExpr) error {
+	if ret.Value == nil {
+		c.chunk.addOp1(OP_RETURN_NIL, ret.TPos.Line)
+		return nil
+	}
+
+	err := c.CompileExpr(ret.Value)
+	if err != nil {
+		return err
+	}
+	c.chunk.addOp1(OP_RETURN, ret.TPos.Line)
+
+	return nil
 }

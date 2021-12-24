@@ -29,6 +29,7 @@ var ClosureType = &Type{"Closure", FunctionMap{}}
 var ExceptionType = &Type{"Exception", FunctionMap{}}
 var BoxType = &Type{"Box", FunctionMap{}}
 var ContinuationType = &Type{"Continuation", FunctionMap{}}
+var BuiltinType = &Type{"Builtin", FunctionMap{}}
 
 var types = map[string]*Type{
 	"Nil":  NilType,
@@ -43,6 +44,7 @@ var types = map[string]*Type{
 	// "Exception"
 	// "Box"
 	// "Continuation"
+	// "Builtin"
 }
 
 type Value interface {
@@ -465,4 +467,22 @@ func NewContinuation(frame *CallFrame) *ContinuationValue {
 
 func (t *ContinuationValue) String() string {
 	return fmt.Sprintf("Continuation[]")
+}
+
+type BuiltinValue struct {
+	Name  string
+	Arity int
+	Func  interface{} // should be a function taking arity number of Value and returning Value
+}
+
+func (t *BuiltinValue) Type() *Type {
+	return BuiltinType
+}
+
+func (t *BuiltinValue) String() string {
+	return fmt.Sprintf("builtin %s(%s, %d)", t.Type().Name, t.Name, t.Arity)
+}
+
+func NewBuiltin(name string, arity int, function interface{}) *BuiltinValue {
+	return &BuiltinValue{name, arity, function}
 }

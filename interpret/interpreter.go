@@ -2,12 +2,14 @@ package interpret
 
 import (
 	"fmt"
+	"io/ioutil"
+	"strconv"
+	"strings"
 )
 
 const FRAMES_MAX = 64
 const STACK_MAX = 256
-const DEBUG_TRACE = true
-const DEBUG = true
+const DEBUG_TRACE = false
 
 type VM struct {
 	//frames       [FRAMES_MAX]CallFrame
@@ -38,8 +40,52 @@ type Handler struct {
 	ip    int // instruction pointer
 }
 
+func builtinReadlines(file Value) Value {
+	filename := file.(*StringValue).Val
+	content, err := ioutil.ReadFile(filename)
+	if err != nil {
+		panic(fmt.Sprintf("Can't read file: %s", filename))
+	}
+	lines := strings.Split(strings.Trim(string(content), "\n"), "\n")
+
+	list := ListNil()
+	for i := len(lines) - 1; i >= 0; i-- {
+		list = ListCons(NewString(lines[i]), list)
+	}
+	return list
+}
+
+func builtinLen(v Value) Value {
+	switch x := v.(type) {
+	case *ListValue:
+		return NewInt(x.len)
+	case *StringValue:
+		return NewInt(len(x.Val))
+	default:
+		panic("Unsupported value for len()")
+	}
+}
+
+func builtinPrintln(value Value) Value {
+	println(value.String())
+	return Nil
+}
+
+func builtinAtoi(value Value) Value {
+	i, err := strconv.Atoi(value.(*StringValue).Val)
+	if err != nil {
+		panic(err)
+	}
+	return NewInt(i)
+}
+
 func NewVm() *VM {
-	return &VM{globals: map[string]Value{}}
+	globals := map[string]Value{}
+	globals["readlines"] = NewBuiltin("readlines", 1, builtinReadlines)
+	globals["println"] = NewBuiltin("println", 1, builtinPrintln)
+	globals["atoi"] = NewBuiltin("atoi", 1, builtinAtoi)
+	globals["len"] = NewBuiltin("len", 1, builtinLen)
+	return &VM{globals: globals}
 }
 
 func (frame *CallFrame) pushStack(v Value) {
@@ -141,7 +187,7 @@ func (vm *VM) run() (Value, error) {
 			frame.stackTop -= len(frame.closure.Function.Chunk.LocalNames)
 			// todo: clean up references for garbage collection
 
-			if DEBUG {
+			if DEBUG_TRACE {
 				if frame.stackTop != 0 {
 					panic("expected empty stack")
 				}
@@ -152,7 +198,9 @@ func (vm *VM) run() (Value, error) {
 				return retVal, nil
 			} else {
 				frame.returnFrame.ip = frame.returnIp
-				fmt.Printf("returning to %d\n", frame.returnFrame.ip)
+				if DEBUG_TRACE {
+					fmt.Printf("Returning to %d\n", frame.returnFrame.ip)
+				}
 				frame.returnFrame.pushStack(retVal)
 				vm.currentFrame = frame.returnFrame
 			}
@@ -468,6 +516,14 @@ func (frame *CallFrame) opSubscr() error {
 			}
 			frame.pushStack(val)
 		}
+	case *StringValue:
+		r, ok := b.(*IntValue)
+		if !ok {
+			return fmt.Errorf("Trying to subscript %s with %s", a.Type().Name, b.Type().Name)
+		} else {
+			val := []rune(l.Val)[r.Val]
+			frame.pushStack(NewString(string(val)))
+		}
 	default:
 		return fmt.Errorf("Trying to subscript %s with %s", a.Type().Name, b.Type().Name)
 	}
@@ -595,10 +651,6 @@ func (frame *CallFrame) opSubSlice() error {
 	c := frame.popStack()
 	b := frame.popStack()
 	a := frame.popStack()
-	lst, ok := frame.popStack().(*ListValue)
-	if !ok {
-		panic("Subslice on non-list")
-	}
 
 	var from *IntValue
 	var to *IntValue
@@ -617,7 +669,7 @@ func (frame *CallFrame) opSubSlice() error {
 	case *IntValue:
 		to = i
 	case *NilValue:
-		to = NewInt(lst.len)
+		to = NewInt(-1)
 	default:
 		panic("Second element in subslice is not integer")
 	}
@@ -631,8 +683,16 @@ func (frame *CallFrame) opSubSlice() error {
 		panic("Second element in subslice is not integer")
 	}
 
-	newList := lst.Slice(from, to, step)
-	frame.pushStack(newList)
+	switch v := frame.popStack().(type) {
+	case *ListValue:
+		newList := v.Slice(from, to, step)
+		frame.pushStack(newList)
+	case *StringValue:
+		newString := NewString(v.Val[from.Val:to.Val])
+		frame.pushStack(newString)
+	default:
+		panic("Subslice on non-suported value")
+	}
 	return nil
 }
 
@@ -646,11 +706,23 @@ func (frame *CallFrame) opCreateList(size int) {
 
 func (vm *VM) opCall(arity int) {
 	frame := vm.currentFrame
-	fn := frame.peekStack(arity).(*ClosureValue)
-
-	newFrame := vm.NewFrame(fn, frame.stack[frame.stackTop-arity:frame.stackTop], frame, frame.ip)
-	vm.currentFrame = newFrame
-	frame.stackTop -= arity + 1
+	switch fn := frame.peekStack(arity).(type) {
+	case *ClosureValue:
+		newFrame := vm.NewFrame(fn, frame.stack[frame.stackTop-arity:frame.stackTop], frame, frame.ip)
+		vm.currentFrame = newFrame
+		frame.stackTop -= arity + 1
+	case *BuiltinValue:
+		if arity == 1 {
+			f := fn.Func.(func(Value) Value)
+			v := frame.popStack()
+			frame.popStack()
+			frame.pushStack(f(v))
+		} else {
+			panic(fmt.Sprintf("Not implemented arity: %d", arity))
+		}
+	default:
+		panic("Trying to call non closure and non builtin")
+	}
 }
 
 func (vm *VM) opCallMethod(arity int, name string) {

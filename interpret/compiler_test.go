@@ -492,3 +492,13 @@ func TestMethodDef(t *testing.T) {
 	[1, 2].head()`,
 		1)
 }
+
+func TestReturn(t *testing.T) {
+	assertInt(t, `
+	fn foo() { 
+		return 3
+		4
+	}
+	foo()
+	`, 3)
+}

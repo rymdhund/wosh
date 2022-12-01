@@ -344,18 +344,18 @@ func (t *ListValue) Len() int {
 	return t.len
 }
 
-func (t *ListValue) Slice(i, j, step *IntValue) *ListValue {
-	if step.Val == 0 {
+func (t *ListValue) Slice(i, j, step int) *ListValue {
+	if step == 0 {
 		panic("List cannot slice on step = 0")
 	}
-	if step.Val != 1 {
+	if step != 1 {
 		// TODO
 		panic("Not yet support for different step sizes")
 	}
 
 	length := t.Len()
-	idx1 := i.Val
-	idx2 := j.Val
+	idx1 := i
+	idx2 := j
 	if idx1 < 0 {
 		idx1 = length + idx1
 	}

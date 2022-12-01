@@ -690,52 +690,28 @@ func (frame *CallFrame) opSubSlice() error {
 	a := frame.popStack()
 	x := frame.popStack()
 
-	var from *IntValue
-	var to *IntValue
-	var step *IntValue
-
-	switch i := a.(type) {
-	case *IntValue:
-		from = i
-	case *NilValue:
-		from = NewInt(0)
-	default:
-		panic("First element in subslice is not integer")
+	intOr := func(v Value, def int) int {
+		switch i := v.(type) {
+		case *IntValue:
+			return i.Val
+		case *NilValue:
+			return def
+		default:
+			panic("Element in subslice is not integer")
+		}
 	}
 
-	switch i := c.(type) {
-	case *IntValue:
-		step = i
-	case *NilValue:
-		step = NewInt(1)
-	default:
-		panic("Second element in subslice is not integer")
-	}
+	from := intOr(a, 0)
+	step := intOr(c, 1)
 
 	switch v := x.(type) {
 	case *ListValue:
-		switch i := b.(type) {
-		case *IntValue:
-			to = i
-		case *NilValue:
-			to = NewInt(v.len)
-		default:
-			panic("Second element in subslice is not integer")
-		}
+		to := intOr(b, v.Len())
 		newList := v.Slice(from, to, step)
 		frame.pushStack(newList)
 	case *StringValue:
-
-		var to int
-		switch i := b.(type) {
-		case *IntValue:
-			to = i.Val
-		case *NilValue:
-			to = v.Len()
-		default:
-			panic("Second element in subslice is not integer")
-		}
-		newString := NewString(v.Val[from.Val:to])
+		to := intOr(b, v.Len())
+		newString := NewString(v.Val[from:to])
 		frame.pushStack(newString)
 	default:
 		panic("Subslice on non-suported value")

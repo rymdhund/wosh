@@ -9,7 +9,7 @@ import (
 
 const FRAMES_MAX = 64
 const STACK_MAX = 256
-const DEBUG_TRACE = false
+const DEBUG_TRACE = true
 
 type VM struct {
 	//frames       [FRAMES_MAX]CallFrame
@@ -62,7 +62,7 @@ func builtinLen(v Value) Value {
 	case *StringValue:
 		return NewInt(len(x.Val))
 	default:
-		panic("Unsupported value for len()")
+		panic(fmt.Sprintf("%v does not support len()", v))
 	}
 }
 
@@ -422,7 +422,11 @@ func (frame *CallFrame) opEq() bool {
 		_, ok := b.(*NilValue)
 		frame.pushStack(NewBool(ok))
 	default:
-		frame.pushStack(a.Type().Methods["eq"])
+		method, ok := a.Type().Methods["eq"]
+		if !ok {
+			panic(fmt.Sprintf("No eq method on %s", a.Type().Name))
+		}
+		frame.pushStack(method)
 		frame.pushStack(a)
 		frame.pushStack(b)
 		return true
@@ -444,7 +448,11 @@ func (frame *CallFrame) opLess() (bool, error) {
 			frame.pushStack(NewBool(l.Val < r.Val))
 		}
 	default:
-		frame.pushStack(a.Type().Methods["lt"])
+		method, ok := a.Type().Methods["lt"]
+		if !ok {
+			panic(fmt.Sprintf("No lt method on %s", a.Type().Name))
+		}
+		frame.pushStack(method)
 		frame.pushStack(a)
 		frame.pushStack(b)
 		return true, nil
@@ -632,14 +640,18 @@ func (frame *CallFrame) opDiv() (bool, error) {
 func (frame *CallFrame) opCons() (bool, error) {
 	b := frame.popStack()
 	a := frame.popStack()
-	fmt.Printf("Trying to cons %s and %s", a.Type().Name, b.Type().Name)
 	switch l := b.(type) {
 	case *ListValue:
 		frame.pushStack(ListCons(a, l))
 	default:
 		fmt.Printf("WDF\n")
+		method, ok := a.Type().Methods["cons"]
+		if !ok {
+			return false, fmt.Errorf("No cons method on %s", a.Type().Name)
+		}
+
 		// cons operator is right associative
-		frame.pushStack(a.Type().Methods["cons"])
+		frame.pushStack(method)
 		frame.pushStack(b)
 		frame.pushStack(a)
 		return true, nil
@@ -651,6 +663,7 @@ func (frame *CallFrame) opSubSlice() error {
 	c := frame.popStack()
 	b := frame.popStack()
 	a := frame.popStack()
+	x := frame.popStack()
 
 	var from *IntValue
 	var to *IntValue
@@ -665,15 +678,6 @@ func (frame *CallFrame) opSubSlice() error {
 		panic("First element in subslice is not integer")
 	}
 
-	switch i := b.(type) {
-	case *IntValue:
-		to = i
-	case *NilValue:
-		to = NewInt(-1)
-	default:
-		panic("Second element in subslice is not integer")
-	}
-
 	switch i := c.(type) {
 	case *IntValue:
 		step = i
@@ -683,12 +687,31 @@ func (frame *CallFrame) opSubSlice() error {
 		panic("Second element in subslice is not integer")
 	}
 
-	switch v := frame.popStack().(type) {
+	switch v := x.(type) {
 	case *ListValue:
+		switch i := b.(type) {
+		case *IntValue:
+			to = i
+		case *NilValue:
+			to = NewInt(v.len)
+		default:
+			panic("Second element in subslice is not integer")
+		}
 		newList := v.Slice(from, to, step)
 		frame.pushStack(newList)
+		fmt.Printf("slicing %s %s %s", from, to, step)
 	case *StringValue:
-		newString := NewString(v.Val[from.Val:to.Val])
+
+		var to int
+		switch i := b.(type) {
+		case *IntValue:
+			to = i.Val
+		case *NilValue:
+			to = v.Len()
+		default:
+			panic("Second element in subslice is not integer")
+		}
+		newString := NewString(v.Val[from.Val:to])
 		frame.pushStack(newString)
 	default:
 		panic("Subslice on non-suported value")

@@ -24,6 +24,7 @@ func parseMain(prog string) (*ast.FuncDefExpr, error) {
 }
 
 func run(t *testing.T, prog string) Value {
+	t.Helper()
 	main, err := parseMain(prog)
 	if err != nil {
 		t.Fatal(err)
@@ -392,6 +393,7 @@ func TestTry8(t *testing.T) {
 }
 
 func assertFalse(t *testing.T, prog string) {
+	t.Helper()
 	res := run(t, prog)
 	if !Equal(res, NewBool(false)) {
 		t.Errorf("expected false, got %s", res)
@@ -399,6 +401,7 @@ func assertFalse(t *testing.T, prog string) {
 }
 
 func assertTrue(t *testing.T, prog string) {
+	t.Helper()
 	res := run(t, prog)
 	if !Equal(res, NewBool(true)) {
 		t.Errorf("expected true, got %s", res)
@@ -406,6 +409,7 @@ func assertTrue(t *testing.T, prog string) {
 }
 
 func assertInt(t *testing.T, prog string, value int) {
+	t.Helper()
 	res := run(t, prog)
 	if !Equal(res, NewInt(value)) {
 		t.Errorf("expected %d, got %s", value, res)

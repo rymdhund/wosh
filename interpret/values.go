@@ -3,6 +3,7 @@ package interpret
 import (
 	"fmt"
 	"os"
+	"strings"
 )
 
 type QuickMethod uint8
@@ -264,7 +265,21 @@ func (t *ListValue) Type() *Type {
 }
 
 func (t *ListValue) String() string {
-	return "list"
+	b := strings.Builder{}
+	b.WriteString("list(")
+	x := t.head
+	if x != nil {
+		b.WriteString(x.Val.String())
+		x = x.next
+	}
+	for x != nil {
+		b.WriteString(", ")
+		b.WriteString(x.Val.String())
+		x = x.next
+	}
+	b.WriteString(")")
+
+	return b.String()
 }
 
 // Returns (nil, false) in case of out of bounds error

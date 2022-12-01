@@ -229,6 +229,11 @@ func (vm *VM) run() (Value, error) {
 			if doCall {
 				vm.opCall(2)
 			}
+		case OP_NEG:
+			err := frame.opNeg()
+			if err != nil {
+				return nil, err
+			}
 		case OP_ADD:
 			doCall, err := frame.opAdd()
 			if err != nil {
@@ -460,6 +465,18 @@ func (frame *CallFrame) opLess() (bool, error) {
 	return false, nil
 }
 
+func (frame *CallFrame) opNeg() error {
+	a := frame.popStack()
+
+	switch l := a.(type) {
+	case *IntValue:
+		frame.pushStack(NewInt(-l.Val))
+	default:
+		return fmt.Errorf("Trying to neg %s", a.Type().Name)
+	}
+	return nil
+}
+
 func (frame *CallFrame) opNot() error {
 	a := frame.popStack()
 
@@ -518,9 +535,13 @@ func (frame *CallFrame) opSubscr() error {
 		if !ok {
 			return fmt.Errorf("Trying to subscript %s with %s", a.Type().Name, b.Type().Name)
 		} else {
-			val, ok := l.Get(r.Val)
+			idx := r.Val
+			if idx < 0 {
+				idx = l.len + idx
+			}
+			val, ok := l.Get(idx)
 			if !ok {
-				return fmt.Errorf("List index out of bounds")
+				return fmt.Errorf("List index out of bounds %d", r.Val)
 			}
 			frame.pushStack(val)
 		}
@@ -529,7 +550,11 @@ func (frame *CallFrame) opSubscr() error {
 		if !ok {
 			return fmt.Errorf("Trying to subscript %s with %s", a.Type().Name, b.Type().Name)
 		} else {
-			val := []rune(l.Val)[r.Val]
+			idx := r.Val
+			if idx < 0 {
+				idx = l.Len() - idx
+			}
+			val := []rune(l.Val)[idx]
 			frame.pushStack(NewString(string(val)))
 		}
 	default:

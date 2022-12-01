@@ -475,6 +475,7 @@ func TestBool(t *testing.T) {
 func TestList(t *testing.T) {
 	assertInt(t, "[1, 2][0]", 1)
 	assertInt(t, "[1, 2][1]", 2)
+	assertInt(t, "[1, 2][-1]", 2)
 
 	assertInt(t, "(0 :: [1, 2])[0]", 0)
 	assertInt(t, "(0 :: 1 :: 2 :: [])[1]", 1)
@@ -483,6 +484,7 @@ func TestList(t *testing.T) {
 	assertInt(t, "[1, 2, 3][1:][1]", 3)
 	assertInt(t, "[1, 2, 3][:2][0]", 1)
 	assertInt(t, "[1, 2, 3][:2][1]", 2)
+	assertInt(t, "[1, 2, 3][:2][-1]", 2)
 }
 
 func TestMethodDef(t *testing.T) {

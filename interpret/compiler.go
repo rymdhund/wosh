@@ -362,8 +362,8 @@ func (c *Compiler) CompileUnaryExpr(op *ast.UnaryExpr) error {
 	switch op.Op {
 	case "!":
 		c.chunk.addOp1(OP_NOT, op.Pos().Line)
-		//	case "-":
-		//		return builtin.Sub(o1, o2), NoExnVal
+	case "-":
+		c.chunk.addOp1(OP_NEG, op.Pos().Line)
 	default:
 		panic(fmt.Sprintf("Not implement operator '%s'", op.Op))
 	}

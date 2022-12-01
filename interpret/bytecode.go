@@ -25,11 +25,16 @@ const (
 	OP_AND     // And top two elements on stack
 	OP_OR      // Or top two elements on stack
 
-	// Binary operators, takens two stack elements and returns one
+	// Unary negate
+	OP_NEG
+
+	// Binary operators, takes two stack elements and returns one
 	OP_ADD
 	OP_SUB
 	OP_MULT
 	OP_DIV
+
+	// List operators
 	OP_SUBSCRIPT_BINARY
 	OP_CONS
 	OP_SUB_SLICE // Pop 4 values from stack, the lowest should be a list
@@ -104,6 +109,7 @@ var op_names = []struct {
 	OP_PUT_SLOT_HEAP:    {"OP_PUT_SLOT_HEAP", 2},
 	OP_PUT_GLOBAL_NAME:  {"OP_PUT_GLOBAL_NAME", 2},
 	OP_SET_METHOD:       {"OP_SET_METHOD", 3},
+	OP_NEG:              {"OP_NEG", 1},
 	OP_ADD:              {"OP_ADD", 1},
 	OP_SUB:              {"OP_SUB", 1},
 	OP_MULT:             {"OP_MULT", 1},
@@ -257,6 +263,8 @@ func (chunk *Chunk) disassembleInstruction(offset int, w io.Writer) int {
 	case OP_AND:
 		chunk.simpleInstruction(instr.String(), w)
 	case OP_OR:
+		chunk.simpleInstruction(instr.String(), w)
+	case OP_NEG:
 		chunk.simpleInstruction(instr.String(), w)
 	case OP_ADD, OP_CONS, OP_SUB_SLICE:
 		chunk.simpleInstruction(instr.String(), w)

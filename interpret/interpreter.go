@@ -9,7 +9,7 @@ import (
 
 const FRAMES_MAX = 64
 const STACK_MAX = 256
-const DEBUG_TRACE = true
+const DEBUG_TRACE = false
 
 type VM struct {
 	//frames       [FRAMES_MAX]CallFrame
@@ -724,7 +724,6 @@ func (frame *CallFrame) opSubSlice() error {
 		}
 		newList := v.Slice(from, to, step)
 		frame.pushStack(newList)
-		fmt.Printf("slicing %s %s %s", from, to, step)
 	case *StringValue:
 
 		var to int
@@ -822,14 +821,11 @@ func (vm *VM) opDo(arity int) {
 		handlerFrame.pushStack(v)
 	}
 
-	fmt.Printf("Do")
 	// Create continuation
 	k := NewContinuation(frame)
 	handlerFrame.pushStack(k)
 	handlerFrame.ip = handler.ip
 	vm.currentFrame = handlerFrame
-
-	fmt.Printf("Effecting to %d\n", handlerFrame.ip)
 }
 
 func (frame *CallFrame) pushHandler(effect string, handlerFrame *CallFrame, ip int) {

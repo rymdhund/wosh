@@ -42,6 +42,7 @@ const (
 	RETURN
 	SINGLE_ARROW
 	AT
+	IMPORT
 )
 
 var tokens = []string{
@@ -80,6 +81,7 @@ var tokens = []string{
 	RETURN:       "RETURN",
 	SINGLE_ARROW: "->",
 	AT:           "@",
+	IMPORT:       "IMPORT",
 }
 
 func (t Token) String() string {
@@ -379,6 +381,8 @@ func (l *Lexer) lexIdentOrKw() TokenItem {
 		return TokenItem{RESUME, lit, pos}
 	case "return":
 		return TokenItem{RETURN, lit, pos}
+	case "import":
+		return TokenItem{IMPORT, lit, pos}
 	default:
 		return TokenItem{IDENT, lit, pos}
 	}

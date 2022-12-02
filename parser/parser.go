@@ -105,13 +105,18 @@ func (p *Parser) showErrors() string {
 	return s
 }
 
-func (p *Parser) Parse() (*ast.BlockExpr, error) {
+// Return code and import list
+func (p *Parser) Parse() (*ast.BlockExpr, []string, error) {
 	l := lexer.NewLexer(p.source)
 	tokens := l.Lex()
 	withoutSpace := filterSpaceAndComment(tokens)
 	tr := NewTokenReader(withoutSpace)
 	p.tokens = tr
 
+	imports, ok := p.ParseImports()
+	if !ok {
+		return nil, []string{}, fmt.Errorf("Import parsing errors:\n%s", p.showErrors())
+	}
 	expr, _ := p.parseBlockExpr()
 	if len(p.tokens.transactions) != 0 {
 		panic("Uncommited transactions in parser!")
@@ -123,15 +128,45 @@ func (p *Parser) Parse() (*ast.BlockExpr, error) {
 		ti := p.tokens.peek()
 		p.error(fmt.Sprintf("Unexpected token '%s'", ti.Lit), ti.Pos)
 	}
-	if len(p.errors) == 0 {
-		return expr, nil
+	if len(p.errors) != 0 {
+		return expr, []string{}, fmt.Errorf("Errors:\n%s", p.showErrors())
 	}
-	return expr, fmt.Errorf("Errors:\n%s", p.showErrors())
+	return expr, imports, nil
+}
+
+func (p *Parser) ParseImports() ([]string, bool) {
+	p.tokens.begin()
+	p.tokens.beginEolSignificance(true)
+
+	imports := []string{}
+
+	for true {
+		// ignore newlines
+		for p.tokens.expect(lexer.EOL) {
+		}
+
+		if imp, ok := p.tokens.expectGet(lexer.IMPORT); ok {
+			if s, ok := p.tokens.expectGet(lexer.STRING); ok {
+				imports = append(imports, s.Lit)
+			} else {
+				p.error(fmt.Sprintf("Expected a string after \"import\"", imp.Lit), imp.Pos)
+				p.tokens.popEolSignificance()
+				p.tokens.rollback()
+				return nil, false
+			}
+		} else {
+			break
+		}
+	}
+	p.tokens.popEolSignificance()
+	p.tokens.commit()
+	return imports, true
 }
 
 // BlockExpr ->
-//  | "\n"* MultiExpr ("\n"+ MultiExpr)* "\n"*
-//  | epsilon
+//
+//	| "\n"* MultiExpr ("\n"+ MultiExpr)* "\n"*
+//	| epsilon
 func (p *Parser) parseBlockExpr() (*ast.BlockExpr, bool) {
 	p.tokens.begin()
 	p.tokens.beginEolSignificance(true)
@@ -216,9 +251,10 @@ func (p *Parser) parseResumeStatement() (ast.Expr, bool) {
 }
 
 // AssignExpr ->
-//   | IdentExpr "=" AssignExpr
-//   | IdentExpr "<-" (ModExpr)? AssignExpr
-//   | PipeExpr
+//
+//	| IdentExpr "=" AssignExpr
+//	| IdentExpr "<-" (ModExpr)? AssignExpr
+//	| PipeExpr
 func (p *Parser) parseAssignExpr() (ast.Expr, bool) {
 	p.tokens.begin()
 
@@ -257,7 +293,8 @@ func (p *Parser) parseAssignExpr() (ast.Expr, bool) {
 }
 
 // PipeExpr ->
-//   | RedirectExpr ('[12*]|' PipeExpr)*
+//
+//	| RedirectExpr ('[12*]|' PipeExpr)*
 func (p *Parser) parsePipeExpr() (ast.Expr, bool) {
 	p.tokens.begin()
 
@@ -290,46 +327,53 @@ func (p *Parser) parsePipeExpr() (ast.Expr, bool) {
 }
 
 // OrExpr ->
-//   | AndExpr ('||' AndExpr)*
+//
+//	| AndExpr ('||' AndExpr)*
 func (p *Parser) parseOrExpr() (ast.Expr, bool) {
 	return p.parseBinaryOpExpr([]string{"||"}, p.parseAndExpr)
 }
 
 // AndExpr ->
-//   | CompExpr ('||' CompExpr)*
+//
+//	| CompExpr ('||' CompExpr)*
 func (p *Parser) parseAndExpr() (ast.Expr, bool) {
 	return p.parseBinaryOpExpr([]string{"&&"}, p.parseCompExpr)
 }
 
 // CompExpr ->
-//   | ConsExpr (<comp-op> ConsExpr)*
+//
+//	| ConsExpr (<comp-op> ConsExpr)*
 func (p *Parser) parseCompExpr() (ast.Expr, bool) {
 	return p.parseBinaryOpExpr([]string{"==", "!=", ">=", "<=", ">", "<"}, p.parseConsExpr)
 }
 
 // ConsExpr ->
-//   | AddExpr <cons_op> ConsExpr
-//   | AddExpr
+//
+//	| AddExpr <cons_op> ConsExpr
+//	| AddExpr
 func (p *Parser) parseConsExpr() (ast.Expr, bool) {
 	//return p.parseBinaryOpExpr([]string{"::"}, p.parseAddExpr)
 	return p.parseBinaryOpRightAssocExpr([]string{"::"}, p.parseAddExpr)
 }
 
 // AddExpr ->
-//   | MultExpr (<add_op> MultExpr)*
+//
+//	| MultExpr (<add_op> MultExpr)*
 func (p *Parser) parseAddExpr() (ast.Expr, bool) {
 	return p.parseBinaryOpExpr([]string{"+", "-"}, p.parseMultExpr)
 }
 
 // MultExpr ->
-//   | UnaryExpr (<mult_op> UnaryExpr)*
+//
+//	| UnaryExpr (<mult_op> UnaryExpr)*
 func (p *Parser) parseMultExpr() (ast.Expr, bool) {
 	return p.parseBinaryOpExpr([]string{"*", "/"}, p.parseUnaryExpr)
 }
 
 // UnaryExpr ->
-//   | PowerExpr
-//   | "-" UnaryExpr
+//
+//	| PowerExpr
+//	| "-" UnaryExpr
 func (p *Parser) parseUnaryExpr() (ast.Expr, bool) {
 	p.tokens.begin()
 
@@ -354,12 +398,13 @@ func (p *Parser) parseUnaryExpr() (ast.Expr, bool) {
 }
 
 // PrimaryExpr ->
-//  | CallExpr
-//  | AttrExpr
-//  | SubscrExpr
-//  | AtomExpr
 //
-//  AtomExpr [AttrExpr | CallExpr | SubscrExpr]*
+//	| CallExpr
+//	| AttrExpr
+//	| SubscrExpr
+//	| AtomExpr
+//
+//	AtomExpr [AttrExpr | CallExpr | SubscrExpr]*
 func (p *Parser) parsePrimary() (ast.Expr, bool) {
 	expr, ok := p.parseAtomExpr()
 	if !ok {
@@ -428,7 +473,8 @@ func (p *Parser) parseCallExpr() ([]ast.Expr, bool) {
 }
 
 // AttrExpr ->
-//  | .<Ident>
+//
+//	| .<Ident>
 func (p *Parser) parseAttrExpr() (*ast.Ident, bool) {
 	p.tokens.begin()
 
@@ -520,12 +566,13 @@ func (p *Parser) parseSubscrHelper() ([]ast.Expr, lexer.Position, bool) {
 }
 
 // AtomExpr ->
-//   | IfExpr
-//   | ForExpr
-//   | FnDefExpr
-//   | BasicLit
-//   | Identifier
-//   | Enclosure
+//
+//	| IfExpr
+//	| ForExpr
+//	| FnDefExpr
+//	| BasicLit
+//	| Identifier
+//	| Enclosure
 func (p *Parser) parseAtomExpr() (ast.Expr, bool) {
 	iff, ok := p.parseIfExpr()
 	if ok {

@@ -10,7 +10,7 @@ import (
 
 func parseMain(prog string) (*ast.FuncDefExpr, error) {
 	p := parser.NewParser(prog)
-	exprs, err := p.Parse()
+	exprs, _, err := p.Parse()
 	if err != nil {
 		return nil, err
 	}

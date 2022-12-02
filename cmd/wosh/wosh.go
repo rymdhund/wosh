@@ -24,10 +24,13 @@ func main() {
 		os.Exit(1)
 	}
 	p := parser.NewParser(string(content))
-	block, err := p.Parse()
+	block, imports, err := p.Parse()
 	if err != nil {
 		fmt.Printf("Parsing error: %s\n", err)
 		os.Exit(1)
+	}
+	if len(imports) > 0 {
+		panic("Imports not implemented")
 	}
 	// runEval(block)
 	runCompiled(block)

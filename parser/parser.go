@@ -666,7 +666,7 @@ func (p *Parser) parseCommand() (ast.Expr, bool) {
 	return nil, false
 }
 
-func (p *Parser) parseIfExpr() (ast.Expr, bool) {
+func (p *Parser) parseIfExpr() (*ast.IfExpr, bool) {
 	p.tokens.begin()
 
 	iff, ok := p.tokens.expectGet(lexer.IF)
@@ -685,24 +685,11 @@ func (p *Parser) parseIfExpr() (ast.Expr, bool) {
 		return nil, false
 	}
 
-	_, ok = p.tokens.expectGet(lexer.LBRACE)
+	then, ok := p.parseBracedBlock("if")
 	if !ok {
-		p.error(fmt.Sprintf("Expected '{' to start expression in if, found %s", p.tokens.peek().Lit), p.tokens.peek().Pos)
 		p.tokens.popEolSignificance()
 		p.tokens.rollback()
 		return nil, false
-	}
-
-	then, ok := p.parseBlockExpr()
-	if !ok {
-		// TODO
-		panic("not implemented ifexpr then error case")
-	}
-
-	_, ok = p.tokens.expectGet(lexer.RBRACE)
-	if !ok {
-		// TODO
-		panic("not implemented ifexpr '}' error case")
 	}
 
 	// We might eat some eols
@@ -713,29 +700,24 @@ func (p *Parser) parseIfExpr() (ast.Expr, bool) {
 		p.tokens.rollback() // Rollback any EOL we ate
 		p.tokens.popEolSignificance()
 		p.tokens.commit() // Commit our if
-		return &ast.IfExpr{cond, then, nil, iff.Pos}, true
+		return &ast.IfExpr{[]ast.ElifPart{{cond, then}}, nil, iff.Pos}, true
 	}
 	p.tokens.commit()
 
-	_, ok = p.tokens.expectGet(lexer.LBRACE)
-	if !ok {
-		p.error(fmt.Sprintf("Expected \"{\" after \"else\", found %s", p.tokens.peek().Lit), p.tokens.peek().Pos)
+	// Check for "else if"
+	elif, ok := p.parseIfExpr()
+	if ok {
+		ifs := make([]ast.ElifPart, 0, len(elif.ElifParts))
+		ifs = append(ifs, ast.ElifPart{cond, then})
+		ifs = append(ifs, elif.ElifParts...)
+
 		p.tokens.popEolSignificance()
-		p.tokens.rollback()
-		return nil, false
+		p.tokens.commit() // Commit our if
+		return &ast.IfExpr{ifs, elif.Else, iff.Pos}, true
 	}
 
-	elsee, ok := p.parseBlockExpr()
+	elsee, ok := p.parseBracedBlock("else")
 	if !ok {
-		p.error(fmt.Sprintf("Expected inner expression in else expression, found %s", p.tokens.peek().Lit), p.tokens.peek().Pos)
-		p.tokens.popEolSignificance()
-		p.tokens.rollback()
-		return nil, false
-	}
-
-	_, ok = p.tokens.expectGet(lexer.RBRACE)
-	if !ok {
-		p.error(fmt.Sprintf("Expected inner expression in else expression or \"}\", found %s", p.tokens.peek().Lit), p.tokens.peek().Pos)
 		p.tokens.popEolSignificance()
 		p.tokens.rollback()
 		return nil, false
@@ -743,7 +725,7 @@ func (p *Parser) parseIfExpr() (ast.Expr, bool) {
 
 	p.tokens.popEolSignificance()
 	p.tokens.commit()
-	return &ast.IfExpr{cond, then, elsee, iff.Pos}, true
+	return &ast.IfExpr{[]ast.ElifPart{{cond, then}}, elsee, iff.Pos}, true
 }
 
 func (p *Parser) parseForExpr() (ast.Expr, bool) {
@@ -763,21 +745,8 @@ func (p *Parser) parseForExpr() (ast.Expr, bool) {
 		panic("not implemented forexpr cond error case")
 	}
 
-	_, ok = p.tokens.expectGet(lexer.LBRACE)
+	then, ok := p.parseBracedBlock("for")
 	if !ok {
-		// TODO
-		panic("not implemented forexpr '{' error case")
-	}
-
-	then, ok := p.parseBlockExpr()
-	if !ok {
-		// TODO
-		panic("not implemented forexpr then error case")
-	}
-
-	_, ok = p.tokens.expectGet(lexer.RBRACE)
-	if !ok {
-		p.error(fmt.Sprintf("Expected end of for expr, found %s", p.tokens.peek().Lit), p.tokens.peek().Pos)
 		p.tokens.popEolSignificance()
 		p.tokens.rollback()
 		return nil, false
@@ -1261,4 +1230,37 @@ func (p *Parser) parseBinaryOpRightAssocExpr(operators []string, subParser func(
 		p.tokens.commit()
 		return &ast.Bad{op.Pos}, true
 	}
+}
+
+func (p *Parser) parseBracedBlock(name string) (ast.Expr, bool) {
+	p.tokens.begin()
+	p.tokens.beginEolSignificance(false)
+
+	ok := p.tokens.expect(lexer.LBRACE)
+	if !ok {
+		p.error(fmt.Sprintf("Expected \"{\" as start of %s-block, found %s", name, p.tokens.peek().Lit), p.tokens.peek().Pos)
+		p.tokens.popEolSignificance()
+		p.tokens.rollback()
+		return nil, false
+	}
+
+	block, ok := p.parseBlockExpr()
+	if !ok {
+		p.error(fmt.Sprintf("Expected inner expression in block, found %s", p.tokens.peek().Lit), p.tokens.peek().Pos)
+		p.tokens.popEolSignificance()
+		p.tokens.rollback()
+		return nil, false
+	}
+
+	_, ok = p.tokens.expectGet(lexer.RBRACE)
+	if !ok {
+		p.error(fmt.Sprintf("Unexpected %s, expected expression or \"}\"", p.tokens.peek().Lit), p.tokens.peek().Pos)
+		p.tokens.popEolSignificance()
+		p.tokens.rollback()
+		return nil, false
+	}
+
+	p.tokens.popEolSignificance()
+	p.tokens.commit()
+	return block, true
 }

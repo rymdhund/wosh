@@ -69,18 +69,18 @@ func (runner *Runner) RunExpr(env *Env, exp ast.Expr) (Object, Exception) {
 		return runner.RunSubscrExpr(env, v)
 	case *ast.AttrExpr:
 		return runner.RunAttrExpr(env, v)
-	case *ast.IfExpr:
-		cond, exn := runner.RunExpr(env, v.Cond)
-		if exn != NoExnVal {
-			return UnitVal, exn
-		}
-		if GetBool(cond) {
-			return runner.RunExpr(env, v.Then)
-		} else if v.Else != nil {
-			return runner.RunExpr(env, v.Else)
-		} else {
-			return UnitVal, NoExnVal
-		}
+	//case *ast.IfExpr:
+	//	cond, exn := runner.RunExpr(env, v.Cond)
+	//	if exn != NoExnVal {
+	//		return UnitVal, exn
+	//	}
+	//	if GetBool(cond) {
+	//		return runner.RunExpr(env, v.Then)
+	//	} else if v.Else != nil {
+	//		return runner.RunExpr(env, v.Else)
+	//	} else {
+	//		return UnitVal, NoExnVal
+	//	}
 	case *ast.ForExpr:
 		for true {
 			cond, exn := runner.RunExpr(env, v.Cond)

@@ -96,11 +96,15 @@ type BlockExpr struct {
 func (t *BlockExpr) Pos() lexer.Position { return t.TPos }
 func (t *BlockExpr) exprType()           {}
 
-type IfExpr struct {
+type ElifPart struct {
 	Cond Expr
 	Then Expr
-	Else Expr
-	TPos lexer.Position // need to have pos if children are empty
+}
+
+type IfExpr struct {
+	ElifParts []ElifPart // Should always have at least one
+	Else      Expr
+	TPos      lexer.Position // need to have pos if children are empty
 }
 
 func (t *IfExpr) Pos() lexer.Position { return t.TPos }

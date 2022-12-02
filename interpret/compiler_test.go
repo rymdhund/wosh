@@ -100,6 +100,27 @@ func TestIf(t *testing.T) {
 	if !Equal(res, NewInt(0)) {
 		t.Errorf("expected 0, got %s", res)
 	}
+
+	// Else If
+	res = run(t, "if 1 == 1 { 1 } else if 1 == 1 { 2 } else { 3 }")
+	if !Equal(res, NewInt(1)) {
+		t.Errorf("expected 1, got %s", res)
+	}
+
+	res = run(t, "if 1 == 2 { 1 } else if 1 == 1 { 2 } else { 3 }")
+	if !Equal(res, NewInt(2)) {
+		t.Errorf("expected 2, got %s", res)
+	}
+
+	res = run(t, "if 1 == 2 { 1 } else if 2 == 1 { 2 } else { 3 }")
+	if !Equal(res, NewInt(3)) {
+		t.Errorf("expected 3, got %s", res)
+	}
+
+	res = run(t, "if 1 == 2 { 1 } else if 2 == 1 { 2 } else if 3 == 3 { 3 } else { 4 }")
+	if !Equal(res, NewInt(3)) {
+		t.Errorf("expected 3, got %s", res)
+	}
 }
 
 func TestFor(t *testing.T) {

@@ -23,7 +23,7 @@ type Compiler struct {
 	prevScope *Compiler
 
 	// indexes to placeHolders for jumps etc
-	placeHolders []int
+	jumpPositions []int
 }
 
 func (c *Compiler) lookupLocalVar(name string) (uint8, bool) {
@@ -147,6 +147,12 @@ func compileFunctionFromBlock(name string, params []*ast.ParamExpr, block *ast.B
 
 	if DEBUG_TRACE {
 		function.DebugPrint()
+	}
+
+	for _, pos := range c.jumpPositions {
+		if pos != -1 {
+			panic("Non-jumped placeholder")
+		}
 	}
 
 	return function, nil
@@ -567,18 +573,21 @@ func (c *Compiler) CompileFuncDefExpr(fn *ast.FuncDefExpr) error {
 	return nil
 }
 
-// Add placeholder that is 2 ops long. Requires that the previous two bytes are 0x98 0x76
-func (c *Compiler) markJumpPlaceholder2() {
+// Retuns an id that is used by the setPlaceholder function
+func (c *Compiler) addJumpToPlaceholder(jumpOp Op, line int) int {
+	c.chunk.addOp3(jumpOp, Op(0x98), Op(0x76), line)
 	idx := c.chunk.currentPos() - 2
-	if c.chunk.Code[idx] != Op(0x98) || c.chunk.Code[idx+1] != Op(0x76) {
-		panic("Placeholder does not contain magic values 0x98 0x76")
-	}
-	c.placeHolders = append(c.placeHolders, idx)
+	c.jumpPositions = append(c.jumpPositions, idx)
+	return len(c.jumpPositions) - 1
 }
 
-// make 2 op long relative jump from placeholder that is on top of the placeholder stack to idx
-func (c *Compiler) makeRelativeJump2(jumpDestIdx int) {
-	idx := c.placeHolders[len(c.placeHolders)-1]
+// Set a placeholderId
+func (c *Compiler) setPlaceholder(placeholderId, jumpDestIdx int) {
+	idx := c.jumpPositions[placeholderId]
+
+	if idx == -1 {
+		panic("Placeholder Id already used")
+	}
 
 	// jump from position after placeholder
 	offset := jumpDestIdx - (idx + 2)
@@ -591,15 +600,19 @@ func (c *Compiler) makeRelativeJump2(jumpDestIdx int) {
 		panic("Negative jump")
 	}
 
+	if c.chunk.Code[idx] != Op(0x98) || c.chunk.Code[idx+1] != Op(0x76) {
+		panic("Placeholder does not contain magic values 0x98 0x76")
+	}
+
 	c.chunk.Code[idx] = Op(uint8(offset >> 8))
 	c.chunk.Code[idx+1] = Op(uint8(offset))
-	c.placeHolders = c.placeHolders[:len(c.placeHolders)-1]
+	c.jumpPositions[placeholderId] = -1
 }
 
 func (c *Compiler) CompileTryExpr(try *ast.TryExpr) error {
-	c.chunk.addOp3(OP_JUMP, Op(0x98), Op(0x76), try.TPos.Line)
-	c.markJumpPlaceholder2()
+	jumpToTryStart := c.addJumpToPlaceholder(OP_JUMP, try.TPos.Line)
 
+	jumpToEnds := []int{}
 	handlers := []string{}
 	handlerStarts := []int{}
 	for _, handler := range try.HandleBlock {
@@ -632,12 +645,12 @@ func (c *Compiler) CompileTryExpr(try *ast.TryExpr) error {
 
 		// Maybe clean up the continuation here?
 
-		c.chunk.addOp3(OP_JUMP, Op(0x98), Op(0x76), try.TPos.Line)
-		c.markJumpPlaceholder2()
+		// Jump to end
+		jumpToEnds = append(jumpToEnds, c.addJumpToPlaceholder(OP_JUMP, try.TPos.Line))
 		c.scopeEnd()
 	}
 
-	tryStart := c.chunk.currentPos()
+	c.setPlaceholder(jumpToTryStart, c.chunk.currentPos())
 
 	for i, handler := range handlers {
 		// Set handler
@@ -650,11 +663,10 @@ func (c *Compiler) CompileTryExpr(try *ast.TryExpr) error {
 
 	c.chunk.addOp2(OP_POP_HANDLERS, Op(len(try.HandleBlock)), try.Pos().Line)
 
-	donePos := c.chunk.currentPos()
-	for range try.HandleBlock {
-		c.makeRelativeJump2(donePos)
+	endPos := c.chunk.currentPos()
+	for _, endJump := range jumpToEnds {
+		c.setPlaceholder(endJump, endPos)
 	}
-	c.makeRelativeJump2(tryStart)
 
 	return nil
 }
@@ -672,31 +684,65 @@ func (c *Compiler) CompileDoExpr(do *ast.DoExpr) error {
 }
 
 func (c *Compiler) CompileIfExpr(iff *ast.IfExpr) error {
-	err := c.CompileExpr(iff.Cond)
+	err := c.CompileExpr(iff.ElifParts[0].Cond)
 	if err != nil {
 		return err
 	}
-	c.chunk.addOp3(OP_JUMP_IF_FALSE, Op(0x98), Op(0x76), iff.TPos.Line)
-	c.markJumpPlaceholder2()
-	err = c.CompileExpr(iff.Then)
-	if err != nil {
-		return err
-	}
-	if iff.Else != nil {
-		c.chunk.addOp3(OP_JUMP, Op(0x98), Op(0x76), iff.TPos.Line)
-		c.markJumpPlaceholder2()
+	// Jump to next part
+	lastCondFailed := c.addJumpToPlaceholder(OP_JUMP_IF_FALSE, iff.TPos.Line)
 
-		elseIdx := c.chunk.currentPos()
+	err = c.CompileExpr(iff.ElifParts[0].Then)
+	if err != nil {
+		return err
+	}
+
+	endJumpPlaceholders := []int{}
+
+	for _, elif := range iff.ElifParts[1:] {
+		// Jump to end if previous block ran
+		endJump := c.addJumpToPlaceholder(OP_JUMP, iff.TPos.Line)
+		endJumpPlaceholders = append(endJumpPlaceholders, endJump)
+
+		// Jump to here if previous cond failed
+		c.setPlaceholder(lastCondFailed, c.chunk.currentPos())
+
+		err := c.CompileExpr(elif.Cond)
+		if err != nil {
+			return err
+		}
+		// Jump to next part
+		lastCondFailed = c.addJumpToPlaceholder(OP_JUMP_IF_FALSE, iff.TPos.Line)
+
+		err = c.CompileExpr(elif.Then)
+		if err != nil {
+			return err
+		}
+	}
+
+	if iff.Else != nil {
+		// Skip else if previous condition succeeded
+		endJump := c.addJumpToPlaceholder(OP_JUMP, iff.TPos.Line)
+		endJumpPlaceholders = append(endJumpPlaceholders, endJump)
+
+		// Jump to here if previous cond failed
+		c.setPlaceholder(lastCondFailed, c.chunk.currentPos())
+
 		err := c.CompileExpr(iff.Else)
 		if err != nil {
 			return err
 		}
 
-		c.makeRelativeJump2(c.chunk.currentPos())
-		c.makeRelativeJump2(elseIdx)
+		// This is the end
+		for _, jumpPlaceholder := range endJumpPlaceholders {
+			c.setPlaceholder(jumpPlaceholder, c.chunk.currentPos())
+		}
 	} else {
+		// No else, we return NIL from expr
 		c.chunk.addOp1(OP_POP, iff.TPos.Line)
-		c.makeRelativeJump2(c.chunk.currentPos())
+		c.setPlaceholder(lastCondFailed, c.chunk.currentPos())
+		for _, jumpPlaceholder := range endJumpPlaceholders {
+			c.setPlaceholder(jumpPlaceholder, c.chunk.currentPos())
+		}
 		c.chunk.addOp1(OP_NIL, iff.TPos.Line)
 	}
 	return nil
@@ -709,8 +755,8 @@ func (c *Compiler) CompileForExpr(forr *ast.ForExpr) error {
 	if err != nil {
 		return err
 	}
-	c.chunk.addOp3(OP_JUMP_IF_FALSE, 0x98, 0x76, forr.TPos.Line)
-	c.markJumpPlaceholder2()
+	jumpToEnd := c.addJumpToPlaceholder(OP_JUMP_IF_FALSE, forr.TPos.Line)
+
 	err = c.CompileExpr(forr.Then)
 	if err != nil {
 		return err
@@ -719,7 +765,7 @@ func (c *Compiler) CompileForExpr(forr *ast.ForExpr) error {
 
 	jump1, jump2 := twoBytes(c.chunk.currentPos() + 3 - startIdx)
 	c.chunk.addOp3(OP_LOOP, Op(jump1), Op(jump2), forr.TPos.Line)
-	c.makeRelativeJump2(c.chunk.currentPos())
+	c.setPlaceholder(jumpToEnd, c.chunk.currentPos())
 
 	c.chunk.addOp1(OP_NIL, forr.TPos.Line)
 

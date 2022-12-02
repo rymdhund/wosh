@@ -719,20 +719,26 @@ func (p *Parser) parseIfExpr() (ast.Expr, bool) {
 
 	_, ok = p.tokens.expectGet(lexer.LBRACE)
 	if !ok {
-		// TODO
-		panic("not implemented else expr '{' error case")
+		p.error(fmt.Sprintf("Expected \"{\" after \"else\", found %s", p.tokens.peek().Lit), p.tokens.peek().Pos)
+		p.tokens.popEolSignificance()
+		p.tokens.rollback()
+		return nil, false
 	}
 
 	elsee, ok := p.parseBlockExpr()
 	if !ok {
-		// TODO
-		panic("not implemented else expr error error case")
+		p.error(fmt.Sprintf("Expected inner expression in else expression, found %s", p.tokens.peek().Lit), p.tokens.peek().Pos)
+		p.tokens.popEolSignificance()
+		p.tokens.rollback()
+		return nil, false
 	}
 
 	_, ok = p.tokens.expectGet(lexer.RBRACE)
 	if !ok {
-		// TODO
-		panic("not implemented else expr '}' error case")
+		p.error(fmt.Sprintf("Expected inner expression in else expression or \"}\", found %s", p.tokens.peek().Lit), p.tokens.peek().Pos)
+		p.tokens.popEolSignificance()
+		p.tokens.rollback()
+		return nil, false
 	}
 
 	p.tokens.popEolSignificance()

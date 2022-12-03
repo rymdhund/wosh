@@ -88,15 +88,56 @@ func (t Token) String() string {
 	return tokens[t]
 }
 
+func (t Token) IsWhitespace() bool {
+	return t == EOF || t == EOL || t == SPACE
+}
+
 type Position struct {
 	Line int
 	Col  int
 }
 
+type Area struct {
+	Start Position
+	End   Position
+}
+
+func (a Area) GetArea() Area {
+	return a
+}
+
+func (a Area) StartLine() int {
+	return a.Start.Line
+}
+
+func (a Area) IsSingleLine() bool {
+	return a.Start.Line == a.End.Line
+}
+
+func (a Area) To(a2 Area) Area {
+	return Area{a.Start, a2.End}
+}
+
+func NewArea(s, e Position) Area {
+	return Area{s, e}
+}
+
+func (p Position) Extend(len int) Area {
+	return Area{p, Position{p.Line, p.Col + len}}
+}
+
+func (p Position) To(p2 Position) Area {
+	return NewArea(p, p2)
+}
+
 type TokenItem struct {
-	Tok Token
-	Lit string
-	Pos Position
+	Tok  Token
+	Lit  string
+	Area Area
+}
+
+func (ti TokenItem) To(ti2 TokenItem) Area {
+	return NewArea(ti.Area.Start, ti2.Area.End)
 }
 
 type Lexer struct {
@@ -167,7 +208,7 @@ func (l *Lexer) LexTokenItem() TokenItem {
 	for {
 		r, ok := l.peek()
 		if !ok {
-			return TokenItem{EOF, "", l.pos}
+			return TokenItem{EOF, "", l.pos.Extend(0)}
 		}
 
 		// two letter lookahead
@@ -175,87 +216,61 @@ func (l *Lexer) LexTokenItem() TokenItem {
 		switch r2 {
 		case "==", "!=", ">=", "<=", "&&", "||", "::":
 			l.popn(2)
-			l.step(2)
-			return TokenItem{OP, r2, l.pos}
+			return TokenItem{OP, r2, l.step(2)}
 		case "1|", "2|", "*|":
 			l.popn(2)
-			l.step(2)
-			return TokenItem{PIPE_OP, r2, l.pos}
+			return TokenItem{PIPE_OP, r2, l.step(2)}
 		case "<-":
 			return l.lexCapture()
 		case "->":
 			l.popn(2)
-			l.step(2)
-			return TokenItem{SINGLE_ARROW, r2, l.pos}
+
+			return TokenItem{SINGLE_ARROW, r2, l.step(2)}
 		default:
 		}
 
 		switch r {
 		case '\n':
 			l.pop()
-			t := TokenItem{EOL, "\n", l.pos}
+			t := TokenItem{EOL, "\n", l.pos.Extend(0)}
 			l.stepLine()
 			return t
 		case ',':
 			l.pop()
-			t := TokenItem{COMMA, ",", l.pos}
-			l.step(1)
-			return t
+			return TokenItem{COMMA, ",", l.step(1)}
 		case '.':
 			l.pop()
-			t := TokenItem{PERIOD, ".", l.pos}
-			l.step(1)
-			return t
+			return TokenItem{PERIOD, ".", l.step(1)}
 		case ':':
 			l.pop()
-			t := TokenItem{COLON, ":", l.pos}
-			l.step(1)
-			return t
+			return TokenItem{COLON, ":", l.step(1)}
 		case '=':
 			l.pop()
-			t := TokenItem{ASSIGN, "=", l.pos}
-			l.step(1)
-			return t
+			return TokenItem{ASSIGN, "=", l.step(1)}
 		case '(':
 			l.pop()
-			t := TokenItem{LPAREN, "(", l.pos}
-			l.step(1)
-			return t
+			return TokenItem{LPAREN, "(", l.step(1)}
 		case ')':
 			l.pop()
-			t := TokenItem{RPAREN, ")", l.pos}
-			l.step(1)
-			return t
+			return TokenItem{RPAREN, ")", l.step(1)}
 		case '{':
 			l.pop()
-			t := TokenItem{LBRACE, "{", l.pos}
-			l.step(1)
-			return t
+			return TokenItem{LBRACE, "{", l.step(1)}
 		case '}':
 			l.pop()
-			t := TokenItem{RBRACE, "}", l.pos}
-			l.step(1)
-			return t
+			return TokenItem{RBRACE, "}", l.step(1)}
 		case '[':
 			l.pop()
-			t := TokenItem{LBRACKET, "[", l.pos}
-			l.step(1)
-			return t
+			return TokenItem{LBRACKET, "[", l.step(1)}
 		case ']':
 			l.pop()
-			t := TokenItem{RBRACKET, "]", l.pos}
-			l.step(1)
-			return t
+			return TokenItem{RBRACKET, "]", l.step(1)}
 		case '|':
 			l.pop()
-			t := TokenItem{PIPE_OP, "|", l.pos}
-			l.step(1)
-			return t
+			return TokenItem{PIPE_OP, "|", l.step(1)}
 		case '@':
 			l.pop()
-			t := TokenItem{AT, "@", l.pos}
-			l.step(1)
-			return t
+			return TokenItem{AT, "@", l.step(1)}
 		case '\'', '"', '`':
 			return l.lexStringAndCmd()
 		case '#':
@@ -273,14 +288,15 @@ func (l *Lexer) LexTokenItem() TokenItem {
 			return l.lexIdentOrKw()
 		} else {
 			l.pop()
-			l.step(1)
-			return TokenItem{ILLEGAL, string(r), l.pos}
+			return TokenItem{ILLEGAL, string(r), l.step(1)}
 		}
 	}
 }
 
-func (l *Lexer) step(n int) {
-	l.pos.Col += 1
+func (l *Lexer) step(n int) Area {
+	start := l.pos
+	l.pos.Col += n
+	return start.Extend(n)
 }
 
 func (l *Lexer) stepLine() {
@@ -309,9 +325,7 @@ func (l *Lexer) takeWhile(f func(rune) bool) string {
 func (l *Lexer) lexNumber() TokenItem {
 	// TODO: Parse floats?
 	lit := l.takeWhile(unicode.IsDigit)
-	pos := l.pos
-	l.step(len(lit))
-	return TokenItem{INT, lit, pos}
+	return TokenItem{INT, lit, l.step(len(lit))}
 }
 
 func isNot(r rune) func(rune) bool {
@@ -332,13 +346,11 @@ func (l *Lexer) lexStringAndCmd() TokenItem {
 	}
 	lit += string(end)
 
-	pos := l.pos
-	l.step(len(lit))
 	switch start {
 	case '\'', '"':
-		return TokenItem{STRING, lit, pos}
+		return TokenItem{STRING, lit, l.step(len(lit))}
 	case '`':
-		return TokenItem{COMMAND, lit, pos}
+		return TokenItem{COMMAND, lit, l.step(len(lit))}
 	default:
 		panic("Unknown string quote")
 	}
@@ -355,36 +367,34 @@ func (l *Lexer) lexIdentOrKw() TokenItem {
 		panic("couln't pop rune in lexIdent")
 	}
 	lit := string(r) + l.takeWhile(isIdentInner)
-	pos := l.pos
-	l.step(len(lit))
 
 	switch lit {
 	case "true":
-		return TokenItem{BOOL, lit, pos}
+		return TokenItem{BOOL, lit, l.step(len(lit))}
 	case "false":
-		return TokenItem{BOOL, lit, pos}
+		return TokenItem{BOOL, lit, l.step(len(lit))}
 	case "if":
-		return TokenItem{IF, lit, pos}
+		return TokenItem{IF, lit, l.step(len(lit))}
 	case "else":
-		return TokenItem{ELSE, lit, pos}
+		return TokenItem{ELSE, lit, l.step(len(lit))}
 	case "fn":
-		return TokenItem{FN, lit, pos}
+		return TokenItem{FN, lit, l.step(len(lit))}
 	case "for":
-		return TokenItem{FOR, lit, pos}
+		return TokenItem{FOR, lit, l.step(len(lit))}
 	case "try":
-		return TokenItem{TRY, lit, pos}
+		return TokenItem{TRY, lit, l.step(len(lit))}
 	case "handle":
-		return TokenItem{HANDLE, lit, pos}
+		return TokenItem{HANDLE, lit, l.step(len(lit))}
 	case "do":
-		return TokenItem{DO, lit, pos}
+		return TokenItem{DO, lit, l.step(len(lit))}
 	case "resume":
-		return TokenItem{RESUME, lit, pos}
+		return TokenItem{RESUME, lit, l.step(len(lit))}
 	case "return":
-		return TokenItem{RETURN, lit, pos}
+		return TokenItem{RETURN, lit, l.step(len(lit))}
 	case "import":
-		return TokenItem{IMPORT, lit, pos}
+		return TokenItem{IMPORT, lit, l.step(len(lit))}
 	default:
-		return TokenItem{IDENT, lit, pos}
+		return TokenItem{IDENT, lit, l.step(len(lit))}
 	}
 }
 
@@ -395,9 +405,7 @@ func isOp(r rune) bool {
 
 func (l *Lexer) lexOp() TokenItem {
 	lit := l.takeWhile(isOp)
-	pos := l.pos
-	l.step(len(lit))
-	return TokenItem{OP, lit, pos}
+	return TokenItem{OP, lit, l.step(len(lit))}
 }
 
 // Space is ' ' or '\t'
@@ -407,9 +415,7 @@ func isSpace(r rune) bool {
 
 func (l *Lexer) lexSpace() TokenItem {
 	lit := l.takeWhile(isSpace)
-	pos := l.pos
-	l.step(len(lit))
-	return TokenItem{SPACE, lit, pos}
+	return TokenItem{SPACE, lit, l.step(len(lit))}
 }
 
 // a capture can have a modifier like <-1
@@ -424,14 +430,10 @@ func (l *Lexer) lexCapture() TokenItem {
 		l.pop()
 		lit = lit + string(m)
 	}
-	pos := l.pos
-	l.step(len(lit))
-	return TokenItem{CAPTURE, lit, pos}
+	return TokenItem{CAPTURE, lit, l.step(len(lit))}
 }
 
 func (l *Lexer) lexComment() TokenItem {
 	lit := l.takeWhile(isNot('\n'))
-	pos := l.pos
-	l.step(len(lit))
-	return TokenItem{COMMENT, lit, pos}
+	return TokenItem{COMMENT, lit, l.step(len(lit))}
 }

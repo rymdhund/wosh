@@ -173,9 +173,9 @@ func (c *Compiler) CompileBlockExpr(block *ast.BlockExpr) error {
 			//	// the pop cancels out the last element pushed to the stack
 			//	c.chunk.Code = c.chunk.Code[:l-1]
 			//} else {
-			//	c.chunk.addOp1(OP_POP, expr.Pos().Line)
+			//	c.chunk.addOp1(OP_POP, expr.StartLine())
 			//}
-			c.chunk.addOp1(OP_POP, expr.Pos().Line)
+			c.chunk.addOp1(OP_POP, expr.GetArea().End.Line)
 		}
 	}
 	return nil
@@ -257,7 +257,7 @@ func (c *Compiler) CompileExpr(exp ast.Expr) error {
 			return runner.RunCommandExpr(env, v)
 	*/
 	default:
-		panic(fmt.Sprintf("Not implemented expression in compiler: %+v (line %d)", exp, exp.Pos().Line))
+		panic(fmt.Sprintf("Not implemented expression in compiler: %+v (line %d)", exp, exp.GetArea().Start.Line))
 	}
 }
 
@@ -268,20 +268,20 @@ func (c *Compiler) CompileBasicLit(lit *ast.BasicLit) error {
 		if err != nil {
 			panic(fmt.Sprintf("Expected int in basic lit: %s", err))
 		}
-		c.CompileConstant(NewInt(n), lit.Pos().Line)
+		c.CompileConstant(NewInt(n), lit.StartLine())
 	case lexer.STRING:
 		s := lit.Value[1 : len(lit.Value)-1]
-		c.CompileConstant(NewString(s), lit.Pos().Line)
+		c.CompileConstant(NewString(s), lit.StartLine())
 	case lexer.BOOL:
 		if lit.Value == "true" {
-			c.chunk.addOp1(OP_TRUE, lit.Pos().Line)
+			c.chunk.addOp1(OP_TRUE, lit.StartLine())
 		} else if lit.Value == "false" {
-			c.chunk.addOp1(OP_FALSE, lit.Pos().Line)
+			c.chunk.addOp1(OP_FALSE, lit.StartLine())
 		} else {
 			panic(fmt.Sprintf("Expected bool in basic lit: %s", lit.Value))
 		}
 	case lexer.UNIT:
-		c.chunk.addOp1(OP_NIL, lit.Pos().Line)
+		c.chunk.addOp1(OP_NIL, lit.StartLine())
 	default:
 		panic("Not implemented basic literal")
 	}
@@ -305,39 +305,39 @@ func (c *Compiler) CompileOpExpr(op *ast.OpExpr) error {
 
 	switch op.Op {
 	case "+":
-		c.chunk.addOp1(OP_ADD, op.Pos().Line)
+		c.chunk.addOp1(OP_ADD, op.StartLine())
 	case "-":
-		c.chunk.addOp1(OP_SUB, op.Pos().Line)
+		c.chunk.addOp1(OP_SUB, op.StartLine())
 	case "*":
-		c.chunk.addOp1(OP_MULT, op.Pos().Line)
+		c.chunk.addOp1(OP_MULT, op.StartLine())
 	case "/":
-		c.chunk.addOp1(OP_DIV, op.Pos().Line)
+		c.chunk.addOp1(OP_DIV, op.StartLine())
 	case "==":
-		c.chunk.addOp1(OP_EQ, op.Pos().Line)
+		c.chunk.addOp1(OP_EQ, op.StartLine())
 	case "!=":
 		// TODO: Optimize these comparisons to only use one opcode each
-		c.chunk.addOp1(OP_EQ, op.Pos().Line)
-		c.chunk.addOp1(OP_NOT, op.Pos().Line)
+		c.chunk.addOp1(OP_EQ, op.StartLine())
+		c.chunk.addOp1(OP_NOT, op.StartLine())
 	case "<":
-		c.chunk.addOp1(OP_LESS, op.Pos().Line)
+		c.chunk.addOp1(OP_LESS, op.StartLine())
 	case ">":
-		c.chunk.addOp1(OP_SWAP, op.Pos().Line)
-		c.chunk.addOp1(OP_LESS, op.Pos().Line)
+		c.chunk.addOp1(OP_SWAP, op.StartLine())
+		c.chunk.addOp1(OP_LESS, op.StartLine())
 	case "<=":
-		c.chunk.addOp1(OP_SWAP, op.Pos().Line)
-		c.chunk.addOp1(OP_LESS, op.Pos().Line)
-		c.chunk.addOp1(OP_NOT, op.Pos().Line)
+		c.chunk.addOp1(OP_SWAP, op.StartLine())
+		c.chunk.addOp1(OP_LESS, op.StartLine())
+		c.chunk.addOp1(OP_NOT, op.StartLine())
 	case ">=":
-		c.chunk.addOp1(OP_LESS, op.Pos().Line)
-		c.chunk.addOp1(OP_NOT, op.Pos().Line)
+		c.chunk.addOp1(OP_LESS, op.StartLine())
+		c.chunk.addOp1(OP_NOT, op.StartLine())
 	case "&&":
-		c.chunk.addOp1(OP_AND, op.Pos().Line)
+		c.chunk.addOp1(OP_AND, op.StartLine())
 	case "||":
-		c.chunk.addOp1(OP_OR, op.Pos().Line)
+		c.chunk.addOp1(OP_OR, op.StartLine())
 	case "[]":
-		c.chunk.addOp1(OP_SUBSCRIPT_BINARY, op.Pos().Line)
+		c.chunk.addOp1(OP_SUBSCRIPT_BINARY, op.StartLine())
 	case "::":
-		c.chunk.addOp1(OP_CONS, op.Pos().Line)
+		c.chunk.addOp1(OP_CONS, op.StartLine())
 	default:
 		panic(fmt.Sprintf("Not implement operator '%s'", op.Op))
 	}
@@ -351,9 +351,9 @@ func (c *Compiler) CompileUnaryExpr(op *ast.UnaryExpr) error {
 	}
 	switch op.Op {
 	case "!":
-		c.chunk.addOp1(OP_NOT, op.Pos().Line)
+		c.chunk.addOp1(OP_NOT, op.StartLine())
 	case "-":
-		c.chunk.addOp1(OP_NEG, op.Pos().Line)
+		c.chunk.addOp1(OP_NEG, op.StartLine())
 	default:
 		panic(fmt.Sprintf("Not implement operator '%s'", op.Op))
 	}
@@ -372,7 +372,7 @@ func (c *Compiler) CompileListExpr(lst *ast.ListExpr) error {
 		panic("Too long list")
 	}
 
-	c.chunk.addOp2(OP_CREATE_LIST, Op(uint8(size)), lst.Pos().Line)
+	c.chunk.addOp2(OP_CREATE_LIST, Op(uint8(size)), lst.StartLine())
 
 	return nil
 }
@@ -383,7 +383,7 @@ func (c *Compiler) CompileSubSlice(slice *ast.SubscrExpr) error {
 	for _, elem := range slice.Sub {
 		_, ok := elem.(*ast.EmptyExpr)
 		if ok {
-			c.chunk.addOp1(OP_NIL, slice.Pos().Line)
+			c.chunk.addOp1(OP_NIL, slice.StartLine())
 		} else {
 			err := c.CompileExpr(elem)
 			if err != nil {
@@ -393,9 +393,9 @@ func (c *Compiler) CompileSubSlice(slice *ast.SubscrExpr) error {
 	}
 	// make sure we have three arguments
 	for i := len(slice.Sub); i < 3; i++ {
-		c.chunk.addOp1(OP_NIL, slice.Pos().Line)
+		c.chunk.addOp1(OP_NIL, slice.StartLine())
 	}
-	c.chunk.addOp1(OP_SUB_SLICE, slice.Pos().Line)
+	c.chunk.addOp1(OP_SUB_SLICE, slice.StartLine())
 	return nil
 }
 
@@ -452,12 +452,12 @@ func (c *Compiler) CompileAssignExpr(assign *ast.AssignExpr) error {
 	// local variable
 	isHeap, ok := c.heapLookupTable[slot]
 	if ok && isHeap {
-		c.chunk.addOp2(OP_PUT_SLOT_HEAP, Op(slot), assign.Pos().Line)
+		c.chunk.addOp2(OP_PUT_SLOT_HEAP, Op(slot), assign.StartLine())
 	} else {
-		c.chunk.addOp2(OP_PUT_SLOT, Op(slot), assign.Pos().Line)
+		c.chunk.addOp2(OP_PUT_SLOT, Op(slot), assign.StartLine())
 	}
 
-	c.chunk.addOp1(OP_NIL, assign.Pos().Line) // result is nil
+	c.chunk.addOp1(OP_NIL, assign.StartLine()) // result is nil
 	return nil
 }
 
@@ -471,16 +471,16 @@ func (c *Compiler) CompileIdent(ident *ast.Ident) error {
 		// local / captured variable
 		isHeap, ok := c.heapLookupTable[slot]
 		if ok && isHeap {
-			c.chunk.addOp2(OP_LOAD_SLOT_HEAP, Op(slot), ident.Pos().Line)
+			c.chunk.addOp2(OP_LOAD_SLOT_HEAP, Op(slot), ident.StartLine())
 		} else {
-			c.chunk.addOp2(OP_LOAD_SLOT, Op(slot), ident.Pos().Line)
+			c.chunk.addOp2(OP_LOAD_SLOT, Op(slot), ident.StartLine())
 		}
 		return nil
 	}
 
 	// global variable
 	nameIdx := c.getOrSetName(ident.Name)
-	c.chunk.addOp2(OP_LOAD_GLOBAL_NAME, Op(nameIdx), ident.Pos().Line)
+	c.chunk.addOp2(OP_LOAD_GLOBAL_NAME, Op(nameIdx), ident.StartLine())
 	return nil
 }
 
@@ -498,7 +498,7 @@ func (c *Compiler) CompileCallExpr(call *ast.CallExpr) error {
 				return err
 			}
 		}
-		c.chunk.addOp2(OP_CALL, Op(len(call.Args)), call.Pos().Line)
+		c.chunk.addOp2(OP_CALL, Op(len(call.Args)), call.StartLine())
 		return nil
 	}
 
@@ -517,7 +517,7 @@ func (c *Compiler) CompileCallExpr(call *ast.CallExpr) error {
 			}
 		}
 		nameId := c.getOrSetName(attr.Attr.Name)
-		c.chunk.addOp3(OP_CALL_METHOD, Op(len(call.Args)), Op(nameId), call.Pos().Line)
+		c.chunk.addOp3(OP_CALL_METHOD, Op(len(call.Args)), Op(nameId), call.StartLine())
 		return nil
 	}
 
@@ -541,19 +541,19 @@ func (c *Compiler) CompileFuncDefExpr(fn *ast.FuncDefExpr) error {
 
 	constId := c.chunk.addConst(fnValue)
 	nameId := c.getOrSetName(fn.Ident.Name)
-	c.chunk.addOp2(OP_MAKE_CLOSURE, constId, fn.Pos().Line)
+	c.chunk.addOp2(OP_MAKE_CLOSURE, constId, fn.StartLine())
 
 	if fn.ClassParam == nil {
-		c.chunk.addOp2(OP_PUT_GLOBAL_NAME, Op(nameId), fn.Pos().Line)
+		c.chunk.addOp2(OP_PUT_GLOBAL_NAME, Op(nameId), fn.StartLine())
 	} else {
 		if len(fnValue.CaptureSlots) > 0 {
 			panic("No capture slots expected in method!")
 		}
 		classNameId := c.getOrSetName(fn.ClassParam.Type.Name)
-		c.chunk.addOp3(OP_SET_METHOD, Op(classNameId), Op(nameId), fn.Pos().Line)
+		c.chunk.addOp3(OP_SET_METHOD, Op(classNameId), Op(nameId), fn.StartLine())
 	}
 
-	c.chunk.addOp1(OP_NIL, fn.Pos().Line)
+	c.chunk.addOp1(OP_NIL, fn.StartLine())
 	return nil
 }
 
@@ -594,7 +594,7 @@ func (c *Compiler) setPlaceholder(placeholderId, jumpDestIdx int) {
 }
 
 func (c *Compiler) CompileTryExpr(try *ast.TryExpr) error {
-	jumpToTryStart := c.addJumpToPlaceholder(OP_JUMP, try.TPos.Line)
+	jumpToTryStart := c.addJumpToPlaceholder(OP_JUMP, try.StartLine())
 
 	jumpToEnds := []int{}
 	handlers := []string{}
@@ -610,18 +610,18 @@ func (c *Compiler) CompileTryExpr(try *ast.TryExpr) error {
 		slot := c.createScopedLocal(contName)
 		isHeap, ok := c.heapLookupTable[slot]
 		if ok && isHeap {
-			c.chunk.addOp2(OP_PUT_SLOT_HEAP, Op(slot), handler.TPos.Line)
+			c.chunk.addOp2(OP_PUT_SLOT_HEAP, Op(slot), handler.StartLine())
 		} else {
-			c.chunk.addOp2(OP_PUT_SLOT, Op(slot), handler.TPos.Line)
+			c.chunk.addOp2(OP_PUT_SLOT, Op(slot), handler.StartLine())
 		}
 
 		for _, param := range handler.Pattern.Params {
 			slot := c.createScopedLocal(param.Name.Name)
 			isHeap, ok := c.heapLookupTable[slot]
 			if ok && isHeap {
-				c.chunk.addOp2(OP_PUT_SLOT_HEAP, Op(slot), handler.TPos.Line)
+				c.chunk.addOp2(OP_PUT_SLOT_HEAP, Op(slot), handler.StartLine())
 			} else {
-				c.chunk.addOp2(OP_PUT_SLOT, Op(slot), handler.TPos.Line)
+				c.chunk.addOp2(OP_PUT_SLOT, Op(slot), handler.StartLine())
 			}
 		}
 
@@ -630,7 +630,7 @@ func (c *Compiler) CompileTryExpr(try *ast.TryExpr) error {
 		// Maybe clean up the continuation here?
 
 		// Jump to end
-		jumpToEnds = append(jumpToEnds, c.addJumpToPlaceholder(OP_JUMP, try.TPos.Line))
+		jumpToEnds = append(jumpToEnds, c.addJumpToPlaceholder(OP_JUMP, try.StartLine()))
 		c.scopeEnd()
 	}
 
@@ -640,12 +640,12 @@ func (c *Compiler) CompileTryExpr(try *ast.TryExpr) error {
 		// Set handler
 		nameIdx := c.getOrSetName(handler)
 		pos1, pos2 := twoBytes(handlerStarts[i])
-		c.chunk.addOp4(OP_SET_HANDLER, Op(nameIdx), Op(pos1), Op(pos2), try.TPos.Line)
+		c.chunk.addOp4(OP_SET_HANDLER, Op(nameIdx), Op(pos1), Op(pos2), try.StartLine())
 	}
 
 	c.CompileExpr(try.TryBlock)
 
-	c.chunk.addOp2(OP_POP_HANDLERS, Op(len(try.HandleBlock)), try.Pos().Line)
+	c.chunk.addOp2(OP_POP_HANDLERS, Op(len(try.HandleBlock)), try.StartLine())
 
 	endPos := c.chunk.currentPos()
 	for _, endJump := range jumpToEnds {
@@ -662,8 +662,8 @@ func (c *Compiler) CompileDoExpr(do *ast.DoExpr) error {
 			return err
 		}
 	}
-	c.CompileConstant(NewString(do.Ident.Name), do.Ident.Pos().Line)
-	c.chunk.addOp2(OP_DO, Op(len(do.Arguments)), do.Pos().Line)
+	c.CompileConstant(NewString(do.Ident.Name), do.Ident.StartLine())
+	c.chunk.addOp2(OP_DO, Op(len(do.Arguments)), do.StartLine())
 	return nil
 }
 
@@ -673,7 +673,7 @@ func (c *Compiler) CompileIfExpr(iff *ast.IfExpr) error {
 		return err
 	}
 	// Jump to next part
-	lastCondFailed := c.addJumpToPlaceholder(OP_JUMP_IF_FALSE, iff.TPos.Line)
+	lastCondFailed := c.addJumpToPlaceholder(OP_JUMP_IF_FALSE, iff.StartLine())
 
 	err = c.CompileExpr(iff.ElifParts[0].Then)
 	if err != nil {
@@ -684,7 +684,7 @@ func (c *Compiler) CompileIfExpr(iff *ast.IfExpr) error {
 
 	for _, elif := range iff.ElifParts[1:] {
 		// Jump to end if previous block ran
-		endJump := c.addJumpToPlaceholder(OP_JUMP, iff.TPos.Line)
+		endJump := c.addJumpToPlaceholder(OP_JUMP, iff.StartLine())
 		endJumpPlaceholders = append(endJumpPlaceholders, endJump)
 
 		// Jump to here if previous cond failed
@@ -695,7 +695,7 @@ func (c *Compiler) CompileIfExpr(iff *ast.IfExpr) error {
 			return err
 		}
 		// Jump to next part
-		lastCondFailed = c.addJumpToPlaceholder(OP_JUMP_IF_FALSE, iff.TPos.Line)
+		lastCondFailed = c.addJumpToPlaceholder(OP_JUMP_IF_FALSE, iff.StartLine())
 
 		err = c.CompileExpr(elif.Then)
 		if err != nil {
@@ -705,7 +705,7 @@ func (c *Compiler) CompileIfExpr(iff *ast.IfExpr) error {
 
 	if iff.Else != nil {
 		// Skip else if previous condition succeeded
-		endJump := c.addJumpToPlaceholder(OP_JUMP, iff.TPos.Line)
+		endJump := c.addJumpToPlaceholder(OP_JUMP, iff.StartLine())
 		endJumpPlaceholders = append(endJumpPlaceholders, endJump)
 
 		// Jump to here if previous cond failed
@@ -722,12 +722,12 @@ func (c *Compiler) CompileIfExpr(iff *ast.IfExpr) error {
 		}
 	} else {
 		// No else block, we return NIL from expr
-		c.chunk.addOp1(OP_POP, iff.TPos.Line)
+		c.chunk.addOp1(OP_POP, iff.StartLine())
 		c.setPlaceholder(lastCondFailed, c.chunk.currentPos())
 		for _, jumpPlaceholder := range endJumpPlaceholders {
 			c.setPlaceholder(jumpPlaceholder, c.chunk.currentPos())
 		}
-		c.chunk.addOp1(OP_NIL, iff.TPos.Line)
+		c.chunk.addOp1(OP_NIL, iff.StartLine())
 	}
 	return nil
 }
@@ -739,26 +739,26 @@ func (c *Compiler) CompileForExpr(forr *ast.ForExpr) error {
 	if err != nil {
 		return err
 	}
-	jumpToEnd := c.addJumpToPlaceholder(OP_JUMP_IF_FALSE, forr.TPos.Line)
+	jumpToEnd := c.addJumpToPlaceholder(OP_JUMP_IF_FALSE, forr.StartLine())
 
 	err = c.CompileExpr(forr.Then)
 	if err != nil {
 		return err
 	}
-	c.chunk.addOp1(OP_POP, forr.TPos.Line)
+	c.chunk.addOp1(OP_POP, forr.StartLine())
 
 	jump1, jump2 := twoBytes(c.chunk.currentPos() + 3 - startIdx)
-	c.chunk.addOp3(OP_LOOP, Op(jump1), Op(jump2), forr.TPos.Line)
+	c.chunk.addOp3(OP_LOOP, Op(jump1), Op(jump2), forr.StartLine())
 	c.setPlaceholder(jumpToEnd, c.chunk.currentPos())
 
-	c.chunk.addOp1(OP_NIL, forr.TPos.Line)
+	c.chunk.addOp1(OP_NIL, forr.StartLine())
 
 	return nil
 }
 
 func (c *Compiler) CompileResumeExpr(resume *ast.ResumeExpr) error {
 	if resume.Value == nil {
-		c.chunk.addOp1(OP_NIL, resume.TPos.Line)
+		c.chunk.addOp1(OP_NIL, resume.StartLine())
 	} else {
 		err := c.CompileExpr(resume.Value)
 		if err != nil {
@@ -766,7 +766,7 @@ func (c *Compiler) CompileResumeExpr(resume *ast.ResumeExpr) error {
 		}
 	}
 	c.CompileIdent(resume.Ident)
-	c.chunk.addOp1(OP_RESUME, resume.TPos.Line)
+	c.chunk.addOp1(OP_RESUME, resume.StartLine())
 
 	return nil
 }
@@ -803,7 +803,7 @@ func twoBytes(n int) (uint8, uint8) {
 
 func (c *Compiler) CompileReturnExpr(ret *ast.ReturnExpr) error {
 	if ret.Value == nil {
-		c.chunk.addOp1(OP_RETURN_NIL, ret.TPos.Line)
+		c.chunk.addOp1(OP_RETURN_NIL, ret.StartLine())
 		return nil
 	}
 
@@ -811,7 +811,7 @@ func (c *Compiler) CompileReturnExpr(ret *ast.ReturnExpr) error {
 	if err != nil {
 		return err
 	}
-	c.chunk.addOp1(OP_RETURN, ret.TPos.Line)
+	c.chunk.addOp1(OP_RETURN, ret.StartLine())
 
 	return nil
 }

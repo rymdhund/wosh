@@ -15,11 +15,11 @@ func parseMain(prog string) (*ast.FuncDefExpr, error) {
 		return nil, err
 	}
 	return &ast.FuncDefExpr{
-		Ident:      &ast.Ident{lexer.Position{0, 0}, "main"},
+		Ident:      &ast.Ident{"main", lexer.Area{}},
 		ClassParam: nil,
 		Params:     []*ast.ParamExpr{},
 		Body:       exprs,
-		TPos:       lexer.Position{0, 0},
+		Area:       lexer.Area{},
 	}, nil
 }
 

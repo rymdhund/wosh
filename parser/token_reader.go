@@ -82,13 +82,32 @@ func (tr *TokenReader) rollback() {
 	}
 }
 
-// Commit the last transaction
-func (tr *TokenReader) commit() {
-	if len(tr.transactions) > 0 {
-		tr.transactions = tr.transactions[:len(tr.transactions)-1]
+func (tr *TokenReader) nonWhitespaceAreaToHere(startIdx int) lexer.Area {
+	s := startIdx
+	for ; s < tr.idx && tr.items[s].Tok.IsWhitespace(); s++ {
+	}
+
+	e := tr.idx
+	for ; e > s && tr.items[e].Tok.IsWhitespace(); e-- {
+	}
+
+	if s < e {
+		return tr.items[s].Area.Start.To(tr.items[e].Area.End)
 	} else {
+		// Zero non-witespace tokens
+		return tr.items[startIdx].Area.Start.Extend(0)
+	}
+}
+
+// Commit the last transaction. Returns the non-whitespace area consumed
+func (tr *TokenReader) commit() lexer.Area {
+	if len(tr.transactions) == 0 {
 		panic("commit non-existing transaction")
 	}
+
+	area := tr.nonWhitespaceAreaToHere(tr.transactions[len(tr.transactions)-1])
+	tr.transactions = tr.transactions[:len(tr.transactions)-1]
+	return area
 }
 
 func (tr *TokenReader) expect(tok lexer.Token) bool {

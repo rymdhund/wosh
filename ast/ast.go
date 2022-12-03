@@ -4,97 +4,67 @@ import (
 	"github.com/rymdhund/wosh/lexer"
 )
 
-type Node interface {
-	Pos() lexer.Position
-	//PosEnd() lexer.Position
-}
-
 type Expr interface {
-	Node
-	exprType()
+	GetArea() lexer.Area
 }
 
 type Ident struct {
-	TPos lexer.Position
 	Name string
+	lexer.Area
 }
-
-func (t *Ident) Pos() lexer.Position { return t.TPos }
-func (t *Ident) exprType()           {}
 
 type BasicLit struct {
-	TPos  lexer.Position
 	Kind  lexer.Token
 	Value string
+	lexer.Area
 }
-
-func (t *BasicLit) Pos() lexer.Position { return t.TPos }
-func (t *BasicLit) exprType()           {}
 
 type Bad struct {
-	TPos lexer.Position
+	lexer.Area
 }
-
-func (t *Bad) Pos() lexer.Position { return t.TPos }
-func (t *Bad) exprType()           {}
 
 type CallExpr struct {
 	Lhs  Expr
 	Args []Expr
+	lexer.Area
 }
-
-func (t *CallExpr) Pos() lexer.Position { return t.Lhs.Pos() }
-func (t *CallExpr) exprType()           {}
 
 type AttrExpr struct {
 	Lhs  Expr
 	Attr *Ident
+	lexer.Area
 }
-
-func (t *AttrExpr) Pos() lexer.Position { return t.Lhs.Pos() }
-func (t *AttrExpr) exprType()           {}
 
 type SubscrExpr struct {
 	Lhs Expr
 	Sub []Expr
+	lexer.Area
 }
-
-func (t *SubscrExpr) Pos() lexer.Position { return t.Lhs.Pos() }
-func (t *SubscrExpr) exprType()           {}
 
 type PipeExpr struct {
 	Left      Expr
 	Right     Expr
 	Modifiers string
+	lexer.Area
 }
-
-func (t *PipeExpr) Pos() lexer.Position { return t.Left.Pos() }
-func (t *PipeExpr) exprType()           {}
 
 type CaptureExpr struct {
 	Ident *Ident
 	Right Expr
 	Mod   string
+	lexer.Area
 }
-
-func (t *CaptureExpr) Pos() lexer.Position { return t.Ident.Pos() }
-func (t *CaptureExpr) exprType()           {}
 
 type AssignExpr struct {
 	Ident *Ident
 	Right Expr
+	lexer.Area
 }
-
-func (t *AssignExpr) Pos() lexer.Position { return t.Ident.Pos() }
-func (t *AssignExpr) exprType()           {}
 
 type BlockExpr struct {
 	Children []Expr
-	TPos     lexer.Position // need to have pos if children are empty
+	lexer.Area
 }
-
-func (t *BlockExpr) Pos() lexer.Position { return t.TPos }
-func (t *BlockExpr) exprType()           {}
 
 type ElifPart struct {
 	Cond Expr
@@ -104,163 +74,110 @@ type ElifPart struct {
 type IfExpr struct {
 	ElifParts []ElifPart // Should always have at least one
 	Else      Expr
-	TPos      lexer.Position // need to have pos if children are empty
+	lexer.Area
 }
-
-func (t *IfExpr) Pos() lexer.Position { return t.TPos }
-func (t *IfExpr) exprType()           {}
 
 type ForExpr struct {
 	Cond Expr
 	Then Expr
-	TPos lexer.Position // need to have pos if children are empty
+	lexer.Area
 }
-
-func (t *ForExpr) Pos() lexer.Position { return t.TPos }
-func (t *ForExpr) exprType()           {}
 
 type Nop struct {
-	TPos lexer.Position
+	lexer.Area
 }
-
-func (t *Nop) Pos() lexer.Position { return t.TPos }
-func (t *Nop) exprType()           {}
 
 // Different from Nop in that it cant be evaluated
 type EmptyExpr struct {
-	TPos lexer.Position
+	lexer.Area
 }
-
-func (t *EmptyExpr) Pos() lexer.Position { return t.TPos }
-func (t *EmptyExpr) exprType()           {}
 
 type ParenthExpr struct {
 	Inside Expr
-	TPos   lexer.Position
+	lexer.Area
 }
-
-func (t *ParenthExpr) Pos() lexer.Position { return t.TPos }
-func (t *ParenthExpr) exprType()           {}
 
 type OpExpr struct {
 	Left  Expr
 	Right Expr
 	Op    string
+	lexer.Area
 }
-
-func (t *OpExpr) Pos() lexer.Position { return t.Left.Pos() }
-func (t *OpExpr) exprType()           {}
 
 type UnaryExpr struct {
 	Op    string
 	Right Expr
-	TPos  lexer.Position
+	lexer.Area
 }
-
-func (t *UnaryExpr) Pos() lexer.Position { return t.TPos }
-func (t *UnaryExpr) exprType()           {}
 
 type CommandExpr struct {
 	CmdParts []string
-	TPos     lexer.Position
+	lexer.Area
 }
-
-func (t *CommandExpr) Pos() lexer.Position { return t.TPos }
-func (t *CommandExpr) exprType()           {}
 
 type ParamExpr struct {
 	Name *Ident
 	Type *Ident
+	lexer.Area
 }
-
-func (t *ParamExpr) Pos() lexer.Position { return t.Name.Pos() }
-func (t *ParamExpr) exprType()           {}
 
 type FuncDefExpr struct {
 	Ident      *Ident
 	ClassParam *ParamExpr // might be nil
 	Params     []*ParamExpr
 	Body       *BlockExpr
-	TPos       lexer.Position
+	lexer.Area
 }
-
-func (t *FuncDefExpr) Pos() lexer.Position { return t.TPos }
-func (t *FuncDefExpr) exprType()           {}
 
 type ListExpr struct {
 	Elems []Expr
-	TPos  lexer.Position
+	lexer.Area
 }
-
-func (t *ListExpr) Pos() lexer.Position { return t.TPos }
-func (t *ListExpr) exprType()           {}
 
 type MapEntryExpr struct {
 	Key *BasicLit
 	Val Expr
+	lexer.Area
 }
-
-func (t *MapEntryExpr) Pos() lexer.Position { return t.Key.Pos() }
-func (t *MapEntryExpr) exprType()           {}
 
 type MapExpr struct {
 	Elems []*MapEntryExpr
-	TPos  lexer.Position
+	lexer.Area
 }
-
-func (t *MapExpr) Pos() lexer.Position { return t.TPos }
-func (t *MapExpr) exprType()           {}
 
 type MatchCaseExpr struct {
 	Pattern *PatternExpr
 	Then    *BlockExpr
-	TPos    lexer.Position
+	lexer.Area
 }
-
-func (t *MatchCaseExpr) Pos() lexer.Position { return t.TPos }
-func (t *MatchCaseExpr) exprType()           {}
 
 // Currently only supports foo(x, y)
 type PatternExpr struct {
 	Ident  *Ident
 	Params []*ParamExpr
 	Name   *Ident //optional
+	lexer.Area
 }
-
-func (t *PatternExpr) Pos() lexer.Position { return t.Ident.Pos() }
-func (t *PatternExpr) exprType()           {}
 
 type TryExpr struct {
 	TryBlock    *BlockExpr
 	HandleBlock []*MatchCaseExpr
-	TPos        lexer.Position
+	lexer.Area
 }
-
-func (t *TryExpr) Pos() lexer.Position { return t.TPos }
-func (t *TryExpr) exprType()           {}
 
 type DoExpr struct {
 	Ident     *Ident
 	Arguments []Expr
-	TPos      lexer.Position
+	lexer.Area
 }
-
-func (t *DoExpr) Pos() lexer.Position { return t.TPos }
-func (t *DoExpr) exprType()           {}
 
 type ReturnExpr struct {
 	Value Expr // optional
-	TPos  lexer.Position
+	lexer.Area
 }
-
-func (t *ReturnExpr) Pos() lexer.Position { return t.TPos }
-func (t *ReturnExpr) exprType()           {}
 
 type ResumeExpr struct {
 	Ident *Ident
 	Value Expr // optional
-	TPos  lexer.Position
+	lexer.Area
 }
-
-func (t *ResumeExpr) Pos() lexer.Position { return t.TPos }
-func (t *ResumeExpr) exprType()           {}

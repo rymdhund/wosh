@@ -10,7 +10,7 @@ import (
 func TestSimpleParse(t *testing.T) {
 	prog := "foo"
 	p := NewParser(prog)
-	exprs, err := p.Parse()
+	exprs, _, err := p.Parse()
 	if err != nil {
 		t.Error(err)
 	}
@@ -35,7 +35,7 @@ func TestParseBasicLit(t *testing.T) {
 	for _, test := range tests {
 		prog, expKind := test.string, test.Token
 		p := NewParser(prog)
-		exprs, err := p.Parse()
+		exprs, _, err := p.Parse()
 		if err != nil {
 			t.Error(err)
 		}
@@ -64,7 +64,7 @@ func TestParseFnCall(t *testing.T) {
 	}
 	for _, prog := range tests {
 		p := NewParser(prog)
-		exprs, err := p.Parse()
+		exprs, _, err := p.Parse()
 		if err != nil {
 			t.Error(err)
 		}
@@ -85,7 +85,7 @@ func TestParsePipeExpr(t *testing.T) {
 	}
 	for _, prog := range tests {
 		p := NewParser(prog)
-		exprs, err := p.Parse()
+		exprs, _, err := p.Parse()
 		if err != nil {
 			t.Error(err)
 		}
@@ -102,7 +102,7 @@ func TestParseAssignExpr(t *testing.T) {
 	}
 	for _, prog := range tests {
 		p := NewParser(prog)
-		exprs, err := p.Parse()
+		exprs, _, err := p.Parse()
 		if err != nil {
 			t.Error(err)
 		}
@@ -123,7 +123,7 @@ func TestParseCaptureExpr(t *testing.T) {
 	}
 	for _, prog := range tests {
 		p := NewParser(prog)
-		exprs, err := p.Parse()
+		exprs, _, err := p.Parse()
 		if err != nil {
 			t.Error(err)
 		}
@@ -151,7 +151,7 @@ func TestParseBlockExpr(t *testing.T) {
 	for _, test := range tests {
 		prog, expLen := test.string, test.int
 		p := NewParser(prog)
-		exprs, err := p.Parse()
+		exprs, _, err := p.Parse()
 		if err != nil {
 			t.Error(err)
 		}
@@ -174,7 +174,7 @@ func TestParseIfExpr(t *testing.T) {
 	for _, test := range tests {
 		prog := test.string
 		p := NewParser(prog)
-		exprs, err := p.Parse()
+		exprs, _, err := p.Parse()
 		if err != nil {
 			t.Error(err)
 		}
@@ -199,7 +199,7 @@ func TestParseParenthExpr(t *testing.T) {
 	for _, test := range tests {
 		prog := test.string
 		p := NewParser(prog)
-		exprs, err := p.Parse()
+		exprs, _, err := p.Parse()
 		if err != nil {
 			t.Error(err)
 		}
@@ -220,7 +220,7 @@ func TestParseAddExpr(t *testing.T) {
 	for _, test := range tests {
 		prog := test.string
 		p := NewParser(prog)
-		exprs, err := p.Parse()
+		exprs, _, err := p.Parse()
 		if err != nil {
 			t.Error(err)
 		}
@@ -246,7 +246,7 @@ func TestParseOpExpr(t *testing.T) {
 	}
 	for _, test := range tests {
 		p := NewParser(test.expr)
-		exprs, err := p.Parse()
+		exprs, _, err := p.Parse()
 		if err != nil {
 			t.Error(err)
 		}
@@ -263,7 +263,7 @@ func TestParseOpExpr(t *testing.T) {
 
 func parseForTest(t *testing.T, prog string) *ast.BlockExpr {
 	p := NewParser(prog)
-	exprs, err := p.Parse()
+	exprs, _, err := p.Parse()
 	if err != nil {
 		t.Error(err)
 	}
@@ -295,7 +295,7 @@ func TestParseMiscCombinations(t *testing.T) {
 	for _, test := range tests {
 		prog := test.string
 		p := NewParser(prog)
-		_, err := p.Parse()
+		_, _, err := p.Parse()
 		if err != nil {
 			t.Error(err)
 		}
@@ -310,7 +310,7 @@ func TestParseReturn(t *testing.T) {
 	}
 	for _, prog := range tests {
 		p := NewParser(prog)
-		exprs, err := p.Parse()
+		exprs, _, err := p.Parse()
 		if err != nil {
 			t.Error(err)
 		}

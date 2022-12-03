@@ -74,8 +74,8 @@ import (
 const DEBUG = true
 
 type ParserError struct {
-	msg string
-	pos lexer.Position
+	msg  string
+	area lexer.Area
 }
 
 type Parser struct {
@@ -89,18 +89,30 @@ func NewParser(input string) *Parser {
 	return &p
 }
 
-func (p *Parser) error(msg string, pos lexer.Position) {
+func (p *Parser) error(msg string, pos lexer.Area) {
 	err := ParserError{msg, pos}
 	p.errors = append(p.errors, err)
 }
 
 func (p *Parser) showErrors() string {
+	if len(p.errors) == 0 {
+		return ""
+	}
+
+	lines := strings.Split(p.source, "\n")
 	s := ""
 	for i, e := range p.errors {
 		if i > 0 {
-			s += "\n"
+			s += "\n\n"
 		}
-		s += fmt.Sprintf("%s, line: %d:%d", e.msg, e.pos.Line, e.pos.Col)
+		s += fmt.Sprintf("%s, line: %d:%d\n", e.msg, e.area.Start.Line, e.area.Start.Col)
+		s += lines[e.area.Start.Line]
+		length := e.area.End.Col - e.area.Start.Col
+		if !e.area.IsSingleLine() {
+			length = len(lines[e.area.Start.Line]) - e.area.Start.Col
+		}
+		s += lines[e.area.Start.Line]
+		s += fmt.Sprintf("%s%s\n", strings.Repeat(" ", e.area.Start.Col), strings.Repeat("^", length))
 	}
 	return s
 }
@@ -126,7 +138,7 @@ func (p *Parser) Parse() (*ast.BlockExpr, []string, error) {
 	}
 	if !p.tokens.expect(lexer.EOF) {
 		ti := p.tokens.peek()
-		p.error(fmt.Sprintf("Unexpected token '%s'", ti.Lit), ti.Pos)
+		p.error(fmt.Sprintf("Unexpected token '%s'", ti.Lit), ti.Area)
 	}
 	if len(p.errors) != 0 {
 		return expr, []string{}, fmt.Errorf("Errors:\n%s", p.showErrors())
@@ -149,7 +161,7 @@ func (p *Parser) ParseImports() ([]string, bool) {
 			if s, ok := p.tokens.expectGet(lexer.STRING); ok {
 				imports = append(imports, s.Lit)
 			} else {
-				p.error(fmt.Sprintf("Expected a string after \"import\"", imp.Lit), imp.Pos)
+				p.error(fmt.Sprintf("Expected a string after \"import\", got %s", imp.Lit), imp.Area)
 				p.tokens.popEolSignificance()
 				p.tokens.rollback()
 				return nil, false
@@ -170,8 +182,6 @@ func (p *Parser) ParseImports() ([]string, bool) {
 func (p *Parser) parseBlockExpr() (*ast.BlockExpr, bool) {
 	p.tokens.begin()
 	p.tokens.beginEolSignificance(true)
-
-	startPos := p.tokens.peek().Pos
 
 	// skip starting newlines
 	for p.tokens.expect(lexer.EOL) {
@@ -194,8 +204,8 @@ func (p *Parser) parseBlockExpr() (*ast.BlockExpr, bool) {
 	}
 
 	p.tokens.popEolSignificance()
-	p.tokens.commit()
-	return &ast.BlockExpr{exprs, startPos}, true
+
+	return &ast.BlockExpr{exprs, p.tokens.commit()}, true
 }
 
 func (p *Parser) parseMultiExpr() (ast.Expr, bool) {
@@ -228,9 +238,9 @@ func (p *Parser) parseReturnStatement() (ast.Expr, bool) {
 	}
 	exp, ok := p.parseExpr()
 	if ok {
-		return &ast.ReturnExpr{exp, ret.Pos}, true
+		return &ast.ReturnExpr{exp, ret.Area}, true
 	}
-	return &ast.ReturnExpr{nil, ret.Pos}, true
+	return &ast.ReturnExpr{nil, ret.Area}, true
 }
 
 func (p *Parser) parseResumeStatement() (ast.Expr, bool) {
@@ -240,14 +250,14 @@ func (p *Parser) parseResumeStatement() (ast.Expr, bool) {
 	}
 	ident, ok := p.parseIdent()
 	if !ok {
-		p.error("Expected an identifier after this 'resume'", res.Pos)
+		p.error("Expected an identifier after this 'resume'", res.Area)
 		return nil, false
 	}
 	exp, ok := p.parseExpr()
 	if ok {
-		return &ast.ResumeExpr{ident, exp, res.Pos}, true
+		return &ast.ResumeExpr{ident, exp, res.Area.To(exp.GetArea())}, true
 	}
-	return &ast.ResumeExpr{ident, nil, res.Pos}, true
+	return &ast.ResumeExpr{ident, nil, res.Area.To(ident.Area)}, true
 }
 
 // AssignExpr ->
@@ -264,13 +274,12 @@ func (p *Parser) parseAssignExpr() (ast.Expr, bool) {
 		if ok {
 			right, ok := p.parseAssignExpr()
 			if ok {
-				p.tokens.commit()
-				return &ast.AssignExpr{ident, right}, true
+				return &ast.AssignExpr{ident, right, p.tokens.commit()}, true
 			} else {
 				// Continue parsing anyway
-				p.error("Expected an expression after this assign", assign.Pos)
+				p.error("Expected an expression after this assign", assign.Area)
 				p.tokens.commit()
-				return &ast.Bad{assign.Pos}, true
+				return &ast.Bad{assign.Area}, true
 			}
 		}
 		capture, ok := p.tokens.expectGet(lexer.CAPTURE)
@@ -278,13 +287,12 @@ func (p *Parser) parseAssignExpr() (ast.Expr, bool) {
 			right, ok := p.parseAssignExpr()
 			if ok {
 				modifier := capture.Lit[2:]
-				p.tokens.commit()
-				return &ast.CaptureExpr{ident, right, modifier}, true
+				return &ast.CaptureExpr{ident, right, modifier, p.tokens.commit()}, true
 			} else {
 				// Continue parsing anyway
-				p.error("Expected an expression after this assign", assign.Pos)
+				p.error("Expected an expression after this capture", assign.Area)
 				p.tokens.commit()
-				return &ast.Bad{assign.Pos}, true
+				return &ast.Bad{assign.Area}, true
 			}
 		}
 	}
@@ -312,13 +320,12 @@ func (p *Parser) parsePipeExpr() (ast.Expr, bool) {
 		}
 		right, ok := p.parsePipeExpr()
 		if ok {
-			p.tokens.commit()
-			return &ast.PipeExpr{left, right, mod}, true
+			return &ast.PipeExpr{left, right, mod, p.tokens.commit()}, true
 		} else {
 			// Continue parsing anyway
-			p.error("Expected an expression after this pipe, did you forget a space?", pipe.Pos)
+			p.error("Expected an expression after this pipe, did you forget a space?", pipe.Area)
 			p.tokens.commit()
-			return &ast.Bad{pipe.Pos}, true
+			return &ast.Bad{pipe.Area}, true
 		}
 	}
 
@@ -384,8 +391,8 @@ func (p *Parser) parseUnaryExpr() (ast.Expr, bool) {
 	if ok {
 		right, ok := p.parseUnaryExpr()
 		if ok {
-			p.tokens.commit()
-			return &ast.UnaryExpr{sub.Lit, right, sub.Pos}, true
+			a := p.tokens.commit()
+			return &ast.UnaryExpr{sub.Lit, right, a}, true
 		} else {
 			p.tokens.rollback()
 			return nil, false
@@ -415,20 +422,20 @@ func (p *Parser) parsePrimary() (ast.Expr, bool) {
 	for true {
 		ident, ok := p.parseAttrExpr()
 		if ok {
-			expr = &ast.AttrExpr{expr, ident}
+			expr = &ast.AttrExpr{expr, ident, expr.GetArea().To(ident.Area)}
 			continue
 		}
-		args, ok := p.parseCallExpr()
+		args, area, ok := p.parseCallExpr()
 		if ok {
-			expr = &ast.CallExpr{expr, args}
+			expr = &ast.CallExpr{expr, args, expr.GetArea().To(area)}
 			continue
 		}
-		elems, ok := p.parseSubscrExpr()
+		elems, area, ok := p.parseSubscrExpr()
 		if ok {
 			if len(elems) == 1 {
-				expr = &ast.OpExpr{expr, elems[0], "[]"}
+				expr = &ast.OpExpr{expr, elems[0], "[]", expr.GetArea().To(area)}
 			} else {
-				expr = &ast.SubscrExpr{expr, elems}
+				expr = &ast.SubscrExpr{expr, elems, expr.GetArea().To(area)}
 			}
 			continue
 		}
@@ -438,12 +445,12 @@ func (p *Parser) parsePrimary() (ast.Expr, bool) {
 	return expr, true
 }
 
-func (p *Parser) parseCallExpr() ([]ast.Expr, bool) {
+func (p *Parser) parseCallExpr() ([]ast.Expr, lexer.Area, bool) {
 	p.tokens.begin()
 
 	if !p.tokens.expect(lexer.LPAREN) {
 		p.tokens.rollback()
-		return nil, false
+		return nil, lexer.Area{}, false
 	}
 
 	// Parse argument list
@@ -465,11 +472,10 @@ func (p *Parser) parseCallExpr() ([]ast.Expr, bool) {
 	if !p.tokens.expect(lexer.RPAREN) {
 		p.tokens.popEolSignificance()
 		p.tokens.rollback()
-		return nil, false
+		return nil, lexer.Area{}, false
 	}
 	p.tokens.popEolSignificance()
-	p.tokens.commit()
-	return args, true
+	return args, p.tokens.commit(), true
 }
 
 // AttrExpr ->
@@ -485,7 +491,7 @@ func (p *Parser) parseAttrExpr() (*ast.Ident, bool) {
 	}
 	ident, ok := p.parseIdent()
 	if !ok {
-		p.error("expected identifier", dot.Pos)
+		p.error("Expected identifier after dot", dot.Area)
 		p.tokens.rollback()
 		return nil, false
 	}
@@ -494,13 +500,13 @@ func (p *Parser) parseAttrExpr() (*ast.Ident, bool) {
 }
 
 // SubscrExpr
-func (p *Parser) parseSubscrExpr() ([]ast.Expr, bool) {
+func (p *Parser) parseSubscrExpr() ([]ast.Expr, lexer.Area, bool) {
 	// we want to be able to rollback if elems > 3 or < 0
 	p.tokens.begin()
 	elems, pos, ok := p.parseSubscrHelper()
 	if !ok {
 		p.tokens.rollback()
-		return nil, false
+		return nil, lexer.Area{}, false
 	}
 
 	if len(elems) == 1 {
@@ -508,7 +514,7 @@ func (p *Parser) parseSubscrExpr() ([]ast.Expr, bool) {
 		if ok {
 			p.error("wrong number of elements in subscript", pos)
 			p.tokens.rollback()
-			return nil, false
+			return nil, lexer.Area{}, false
 		}
 	}
 	if len(elems) == 3 {
@@ -516,26 +522,26 @@ func (p *Parser) parseSubscrExpr() ([]ast.Expr, bool) {
 		if ok {
 			p.error("3rd pos in subscript cannot be empty", pos)
 			p.tokens.rollback()
-			return nil, false
+			return nil, lexer.Area{}, false
 		}
 	}
 
 	if len(elems) > 3 || len(elems) < 1 {
 		p.error("wrong number of elements in subscript", pos)
 		p.tokens.rollback()
-		return nil, false
+		return nil, lexer.Area{}, false
 	}
-	p.tokens.commit()
-	return elems, true
+
+	return elems, p.tokens.commit(), true
 }
 
-func (p *Parser) parseSubscrHelper() ([]ast.Expr, lexer.Position, bool) {
+func (p *Parser) parseSubscrHelper() ([]ast.Expr, lexer.Area, bool) {
 	p.tokens.begin()
 
-	beg, ok := p.tokens.expectGet(lexer.LBRACKET)
+	ok := p.tokens.expect(lexer.LBRACKET)
 	if !ok {
 		p.tokens.rollback()
-		return nil, lexer.Position{}, false
+		return nil, lexer.Area{}, false
 	}
 
 	elems := []ast.Expr{}
@@ -546,7 +552,7 @@ func (p *Parser) parseSubscrHelper() ([]ast.Expr, lexer.Position, bool) {
 		elem, ok := p.parsePipeExpr()
 		if !ok {
 			// We also accept empty elements like xs[1:]
-			elem = &ast.EmptyExpr{p.tokens.peek().Pos}
+			elem = &ast.EmptyExpr{p.tokens.peek().Area}
 		}
 		elems = append(elems, elem)
 		if !p.tokens.expect(lexer.COLON) {
@@ -557,12 +563,11 @@ func (p *Parser) parseSubscrHelper() ([]ast.Expr, lexer.Position, bool) {
 	if !p.tokens.expect(lexer.RBRACKET) {
 		p.tokens.popEolSignificance()
 		p.tokens.rollback()
-		return nil, lexer.Position{}, false
+		return nil, lexer.Area{}, false
 	}
 
 	p.tokens.popEolSignificance()
-	p.tokens.commit()
-	return elems, beg.Pos, true
+	return elems, p.tokens.commit(), true
 }
 
 // AtomExpr ->
@@ -624,7 +629,7 @@ func (p *Parser) parseAtomExpr() (ast.Expr, bool) {
 func (p *Parser) parseIdent() (*ast.Ident, bool) {
 	if p.tokens.peekToken() == lexer.IDENT {
 		item := p.tokens.pop()
-		return &ast.Ident{item.Pos, item.Lit}, true
+		return &ast.Ident{item.Lit, item.Area}, true
 	}
 	return nil, false
 }
@@ -633,23 +638,23 @@ func (p *Parser) parseBasicLit() (*ast.BasicLit, bool) {
 	peek := p.tokens.peekToken()
 	if peek == lexer.INT {
 		item := p.tokens.pop()
-		return &ast.BasicLit{item.Pos, item.Tok, item.Lit}, true
+		return &ast.BasicLit{item.Tok, item.Lit, item.Area}, true
 	}
 	if peek == lexer.BOOL {
 		item := p.tokens.pop()
-		return &ast.BasicLit{item.Pos, item.Tok, item.Lit}, true
+		return &ast.BasicLit{item.Tok, item.Lit, item.Area}, true
 	}
 	if peek == lexer.STRING {
 		item := p.tokens.pop()
-		return &ast.BasicLit{item.Pos, item.Tok, item.Lit}, true
+		return &ast.BasicLit{item.Tok, item.Lit, item.Area}, true
 	}
 	if peek == lexer.LPAREN {
 		p.tokens.begin()
-		item := p.tokens.pop()
+		p.tokens.pop()
 		ok := p.tokens.expect(lexer.RPAREN)
 		if ok {
-			p.tokens.commit()
-			return &ast.BasicLit{item.Pos, lexer.UNIT, "()"}, true
+			a := p.tokens.commit()
+			return &ast.BasicLit{lexer.UNIT, "()", a}, true
 		}
 		p.tokens.rollback()
 	}
@@ -661,7 +666,7 @@ func (p *Parser) parseCommand() (ast.Expr, bool) {
 		item := p.tokens.pop()
 		content := item.Lit[1 : len(item.Lit)-1]
 		parts := strings.Split(content, " ")
-		return &ast.CommandExpr{parts, item.Pos}, true
+		return &ast.CommandExpr{parts, item.Area}, true
 	}
 	return nil, false
 }
@@ -669,7 +674,7 @@ func (p *Parser) parseCommand() (ast.Expr, bool) {
 func (p *Parser) parseIfExpr() (*ast.IfExpr, bool) {
 	p.tokens.begin()
 
-	iff, ok := p.tokens.expectGet(lexer.IF)
+	ok := p.tokens.expect(lexer.IF)
 	if !ok {
 		p.tokens.rollback()
 		return nil, false
@@ -679,7 +684,7 @@ func (p *Parser) parseIfExpr() (*ast.IfExpr, bool) {
 	p.tokens.beginEolSignificance(false)
 	cond, ok := p.parseMultiExpr()
 	if !ok {
-		p.error(fmt.Sprintf("Expected inner expression in if expression, found %s", p.tokens.peek().Lit), p.tokens.peek().Pos)
+		p.error(fmt.Sprintf("Expected inner expression in if expression, found %s", p.tokens.peek().Lit), p.tokens.peek().Area)
 		p.tokens.popEolSignificance()
 		p.tokens.rollback()
 		return nil, false
@@ -699,8 +704,8 @@ func (p *Parser) parseIfExpr() (*ast.IfExpr, bool) {
 		// No else
 		p.tokens.rollback() // Rollback any EOL we ate
 		p.tokens.popEolSignificance()
-		p.tokens.commit() // Commit our if
-		return &ast.IfExpr{[]ast.ElifPart{{cond, then}}, nil, iff.Pos}, true
+		a := p.tokens.commit() // Commit our if
+		return &ast.IfExpr{[]ast.ElifPart{{cond, then}}, nil, a}, true
 	}
 	p.tokens.commit()
 
@@ -712,8 +717,8 @@ func (p *Parser) parseIfExpr() (*ast.IfExpr, bool) {
 		ifs = append(ifs, elif.ElifParts...)
 
 		p.tokens.popEolSignificance()
-		p.tokens.commit() // Commit our if
-		return &ast.IfExpr{ifs, elif.Else, iff.Pos}, true
+		a := p.tokens.commit() // Commit our if
+		return &ast.IfExpr{ifs, elif.Else, a}, true
 	}
 
 	elsee, ok := p.parseBracedBlock("else")
@@ -724,14 +729,14 @@ func (p *Parser) parseIfExpr() (*ast.IfExpr, bool) {
 	}
 
 	p.tokens.popEolSignificance()
-	p.tokens.commit()
-	return &ast.IfExpr{[]ast.ElifPart{{cond, then}}, elsee, iff.Pos}, true
+	a := p.tokens.commit()
+	return &ast.IfExpr{[]ast.ElifPart{{cond, then}}, elsee, a}, true
 }
 
 func (p *Parser) parseForExpr() (ast.Expr, bool) {
 	p.tokens.begin()
 
-	forTok, ok := p.tokens.expectGet(lexer.FOR)
+	ok := p.tokens.expect(lexer.FOR)
 	if !ok {
 		p.tokens.rollback()
 		return nil, false
@@ -753,14 +758,14 @@ func (p *Parser) parseForExpr() (ast.Expr, bool) {
 	}
 
 	p.tokens.popEolSignificance()
-	p.tokens.commit() // Commit our if
-	return &ast.ForExpr{cond, then, forTok.Pos}, true
+	a := p.tokens.commit()
+	return &ast.ForExpr{cond, then, a}, true
 }
 
 func (p *Parser) parseTryExpr() (ast.Expr, bool) {
 	p.tokens.begin()
 
-	try, ok := p.tokens.expectGet(lexer.TRY)
+	ok := p.tokens.expect(lexer.TRY)
 	if !ok {
 		p.tokens.rollback()
 		return nil, false
@@ -771,7 +776,7 @@ func (p *Parser) parseTryExpr() (ast.Expr, bool) {
 
 	_, ok = p.tokens.expectGet(lexer.LBRACE)
 	if !ok {
-		p.error(fmt.Sprintf("Expected '{' after try, found %s", p.tokens.peek().Lit), p.tokens.peek().Pos)
+		p.error(fmt.Sprintf("Expected '{' after try, found %s", p.tokens.peek().Lit), p.tokens.peek().Area)
 		p.tokens.popEolSignificance()
 		p.tokens.rollback()
 		return nil, false
@@ -791,7 +796,7 @@ func (p *Parser) parseTryExpr() (ast.Expr, bool) {
 
 	ok = p.tokens.expect(lexer.HANDLE)
 	if !ok {
-		p.error(fmt.Sprintf("Expected 'handle' after 'try', found %s", p.tokens.peek().Lit), p.tokens.peek().Pos)
+		p.error(fmt.Sprintf("Expected 'handle' after 'try', found %s", p.tokens.peek().Lit), p.tokens.peek().Area)
 		p.tokens.popEolSignificance()
 		p.tokens.rollback()
 		return nil, false
@@ -815,19 +820,20 @@ func (p *Parser) parseTryExpr() (ast.Expr, bool) {
 
 	_, ok = p.tokens.expectGet(lexer.RBRACE)
 	if !ok {
-		p.error(fmt.Sprintf("Expected '}', found %s", p.tokens.peek().Lit), p.tokens.peek().Pos)
+		p.error(fmt.Sprintf("Expected '}', found %s", p.tokens.peek().Lit), p.tokens.peek().Area)
 		p.tokens.popEolSignificance()
 		p.tokens.rollback()
 		return nil, false
 	}
 
 	p.tokens.popEolSignificance()
-	p.tokens.commit()
-	return &ast.TryExpr{then, matchCases, try.Pos}, true
+	a := p.tokens.commit()
+	return &ast.TryExpr{then, matchCases, a}, true
 }
 
 func (p *Parser) parseMatchCase() (*ast.MatchCaseExpr, bool) {
 	p.tokens.begin()
+	startIdx := p.tokens.idx
 
 	ident, ok := p.parseIdent()
 	if !ok {
@@ -836,7 +842,7 @@ func (p *Parser) parseMatchCase() (*ast.MatchCaseExpr, bool) {
 	}
 
 	if !p.tokens.expect(lexer.LPAREN) {
-		p.error(fmt.Sprintf("Expected '(', found %s", p.tokens.peek().Lit), p.tokens.peek().Pos)
+		p.error(fmt.Sprintf("Expected '(', found %s", p.tokens.peek().Lit), p.tokens.peek().Area)
 		p.tokens.rollback()
 		return nil, false
 	}
@@ -854,7 +860,7 @@ func (p *Parser) parseMatchCase() (*ast.MatchCaseExpr, bool) {
 	}
 
 	if !p.tokens.expect(lexer.RPAREN) {
-		p.error(fmt.Sprintf("Expected ')', found %s", p.tokens.peek().Lit), p.tokens.peek().Pos)
+		p.error(fmt.Sprintf("Expected ')', found %s", p.tokens.peek().Lit), p.tokens.peek().Area)
 		p.tokens.rollback()
 		return nil, false
 	}
@@ -863,22 +869,24 @@ func (p *Parser) parseMatchCase() (*ast.MatchCaseExpr, bool) {
 	if p.tokens.expect(lexer.AT) {
 		name, ok = p.parseIdent()
 		if !ok {
-			p.error(fmt.Sprintf("Expected name following '@', found '%s'", p.tokens.peek().Lit), p.tokens.peek().Pos)
+			p.error(fmt.Sprintf("Expected name following '@', found '%s'", p.tokens.peek().Lit), p.tokens.peek().Area)
 			p.tokens.rollback()
 			return nil, false
 		}
 
 	}
 
+	patternArea := p.tokens.nonWhitespaceAreaToHere(startIdx)
+
 	if !p.tokens.expect(lexer.SINGLE_ARROW) {
-		p.error("Expected '->'", p.tokens.peek().Pos)
+		p.error("Expected '->'", p.tokens.peek().Area)
 		p.tokens.rollback()
 		return nil, false
 	}
 
 	_, ok = p.tokens.expectGet(lexer.LBRACE)
 	if !ok {
-		p.error("Expected '{'", p.tokens.peek().Pos)
+		p.error("Expected '{'", p.tokens.peek().Area)
 		p.tokens.rollback()
 		return nil, false
 	}
@@ -890,26 +898,28 @@ func (p *Parser) parseMatchCase() (*ast.MatchCaseExpr, bool) {
 
 	_, ok = p.tokens.expectGet(lexer.RBRACE)
 	if !ok {
-		p.error("Expected '}'", p.tokens.peek().Pos)
+		p.error("Expected '}'", p.tokens.peek().Area)
 		p.tokens.rollback()
 		return nil, false
 	}
 
-	p.tokens.commit()
+	a := p.tokens.commit()
 	return &ast.MatchCaseExpr{
 		Pattern: &ast.PatternExpr{
 			Ident:  ident,
 			Params: params,
 			Name:   name,
+			Area:   patternArea,
 		},
 		Then: block,
+		Area: a,
 	}, true
 
 }
 
 func (p *Parser) parseDoExpr() (ast.Expr, bool) {
 	p.tokens.begin()
-	do, ok := p.tokens.expectGet(lexer.DO)
+	ok := p.tokens.expect(lexer.DO)
 	if !ok {
 		p.tokens.rollback()
 		return nil, false
@@ -917,26 +927,26 @@ func (p *Parser) parseDoExpr() (ast.Expr, bool) {
 
 	ident, ok := p.parseIdent()
 	if !ok {
-		p.error("Expected effect after 'do'", p.tokens.peek().Pos)
+		p.error("Expected effect after 'do'", p.tokens.peek().Area)
 		p.tokens.rollback()
 		return nil, false
 	}
 
-	args, ok := p.parseCallExpr()
+	args, _, ok := p.parseCallExpr()
 	if !ok {
-		p.error("Expected effect after 'do'", p.tokens.peek().Pos)
+		p.error("Expected effect after 'do'", p.tokens.peek().Area)
 		p.tokens.rollback()
 		return nil, false
 	}
 
-	p.tokens.commit()
-	return &ast.DoExpr{ident, args, do.Pos}, ok
+	a := p.tokens.commit()
+	return &ast.DoExpr{ident, args, a}, ok
 }
 
 func (p *Parser) parseFnDefExpr() (ast.Expr, bool) {
 	p.tokens.begin()
 
-	fn, ok := p.tokens.expectGet(lexer.FN)
+	ok := p.tokens.expect(lexer.FN)
 	if !ok {
 		p.tokens.rollback()
 		return nil, false
@@ -947,9 +957,9 @@ func (p *Parser) parseFnDefExpr() (ast.Expr, bool) {
 	ident, ok := p.parseIdent()
 	if !ok {
 		// See if we have a method definition
-		start, ok := p.tokens.expectGet(lexer.LPAREN)
+		ok := p.tokens.expect(lexer.LPAREN)
 		if !ok {
-			p.error("Bad function definition", fn.Pos)
+			p.error("Bad function definition", p.tokens.peek().Area)
 			p.tokens.rollback()
 			return nil, false
 		}
@@ -957,7 +967,7 @@ func (p *Parser) parseFnDefExpr() (ast.Expr, bool) {
 
 		classParam, ok = p.parseParam(true)
 		if !ok {
-			p.error("Expected class parameter", start.Pos)
+			p.error("Expected class parameter", p.tokens.peek().Area)
 			p.tokens.popEolSignificance()
 			p.tokens.rollback()
 			return nil, false
@@ -965,13 +975,13 @@ func (p *Parser) parseFnDefExpr() (ast.Expr, bool) {
 		ok = p.tokens.expect(lexer.RPAREN)
 		p.tokens.popEolSignificance()
 		if !ok {
-			p.error("Expected class parameter", start.Pos)
+			p.error("Expected closing parenthesis", p.tokens.peek().Area)
 			p.tokens.rollback()
 			return nil, false
 		}
 		ident, ok = p.parseIdent()
 		if !ok {
-			p.error("Couldn't find a method name", fn.Pos)
+			p.error("Expected a method name", p.tokens.peek().Area)
 			p.tokens.rollback()
 			return nil, false
 		}
@@ -997,7 +1007,7 @@ func (p *Parser) parseFnDefExpr() (ast.Expr, bool) {
 
 	if !p.tokens.expect(lexer.RPAREN) {
 		// TODO
-		p.error(fmt.Sprintf("Expected end of function, found %s", p.tokens.peek().Lit), p.tokens.peek().Pos)
+		p.error(fmt.Sprintf("Expected end of function, found %s", p.tokens.peek().Lit), p.tokens.peek().Area)
 		p.tokens.popEolSignificance()
 		p.tokens.rollback()
 		return nil, false
@@ -1012,13 +1022,13 @@ func (p *Parser) parseFnDefExpr() (ast.Expr, bool) {
 	body, ok := p.parseBlockExpr()
 
 	if !p.tokens.expect(lexer.RBRACE) {
-		p.error(fmt.Sprintf("Expected end of for expr in function def, found %s", p.tokens.peek().Lit), p.tokens.peek().Pos)
+		p.error(fmt.Sprintf("Expected end of for expr in function def, found %s", p.tokens.peek().Lit), p.tokens.peek().Area)
 		p.tokens.rollback()
 		return nil, false
 	}
-	p.tokens.commit()
 
-	return &ast.FuncDefExpr{ident, classParam, params, body, fn.Pos}, true
+	a := p.tokens.commit()
+	return &ast.FuncDefExpr{ident, classParam, params, body, a}, true
 }
 
 // parse "foo: Bar"
@@ -1035,8 +1045,8 @@ func (p *Parser) parseParam(forceType bool) (*ast.ParamExpr, bool) {
 			p.tokens.rollback()
 			return nil, false
 		} else {
-			p.tokens.commit()
-			return &ast.ParamExpr{param, nil}, true
+			a := p.tokens.commit()
+			return &ast.ParamExpr{param, nil, a}, true
 		}
 	}
 	typ, ok := p.parseIdent()
@@ -1044,14 +1054,15 @@ func (p *Parser) parseParam(forceType bool) (*ast.ParamExpr, bool) {
 		p.tokens.rollback()
 		return nil, false
 	}
-	p.tokens.commit()
-	return &ast.ParamExpr{param, typ}, true
+
+	a := p.tokens.commit()
+	return &ast.ParamExpr{param, typ, a}, true
 }
 
 func (p *Parser) parseParenthExpr() (ast.Expr, bool) {
 	p.tokens.begin()
 
-	left, ok := p.tokens.expectGet(lexer.LPAREN)
+	ok := p.tokens.expect(lexer.LPAREN)
 	if !ok {
 		p.tokens.rollback()
 		return nil, false
@@ -1061,7 +1072,7 @@ func (p *Parser) parseParenthExpr() (ast.Expr, bool) {
 	p.tokens.beginEolSignificance(false)
 	inner, ok := p.parseMultiExpr()
 	if !ok {
-		p.error(fmt.Sprintf("Expected start of expression in pareth expression, found %s", p.tokens.peek().Lit), p.tokens.peek().Pos)
+		p.error(fmt.Sprintf("Expected start of expression in pareth expression, found %s", p.tokens.peek().Lit), p.tokens.peek().Area)
 		p.tokens.popEolSignificance()
 		p.tokens.rollback()
 		return nil, false
@@ -1074,8 +1085,8 @@ func (p *Parser) parseParenthExpr() (ast.Expr, bool) {
 	}
 
 	p.tokens.popEolSignificance()
-	p.tokens.commit()
-	return &ast.ParenthExpr{inner, left.Pos}, true
+	a := p.tokens.commit()
+	return &ast.ParenthExpr{inner, a}, true
 }
 
 func (p *Parser) parseBracketExpr() (ast.Expr, bool) {
@@ -1087,7 +1098,7 @@ func (p *Parser) parseBracketExpr() (ast.Expr, bool) {
 }
 
 func (p *Parser) parseBraceExpr() (ast.Expr, bool) {
-	elems, pos, ok := p.parseEnclosure(lexer.LBRACE, lexer.RBRACE, lexer.COMMA, p.parseMapEntry)
+	elems, area, ok := p.parseEnclosure(lexer.LBRACE, lexer.RBRACE, lexer.COMMA, p.parseMapEntry)
 	if !ok {
 		return nil, false
 	}
@@ -1095,7 +1106,7 @@ func (p *Parser) parseBraceExpr() (ast.Expr, bool) {
 	for _, e := range elems {
 		mapEntries = append(mapEntries, e.(*ast.MapEntryExpr))
 	}
-	return &ast.MapExpr{mapEntries, pos}, true
+	return &ast.MapExpr{mapEntries, area}, true
 }
 
 func (p *Parser) parseMapEntry() (ast.Expr, bool) {
@@ -1106,28 +1117,29 @@ func (p *Parser) parseMapEntry() (ast.Expr, bool) {
 		return nil, false
 	}
 	if !p.tokens.expect(lexer.COLON) {
-		p.error("Expected colon in map literal", p.tokens.peek().Pos)
+		p.error("Expected colon in map literal", p.tokens.peek().Area)
 		p.tokens.rollback()
 		return nil, false
 	}
 	val, ok := p.parsePipeExpr()
 	if !ok {
-		p.error("Expected value in map literal", p.tokens.peek().Pos)
+		p.error("Expected value in map literal", p.tokens.peek().Area)
 		p.tokens.rollback()
 		return nil, false
 	}
-	p.tokens.commit()
-	return &ast.MapEntryExpr{key, val}, true
+
+	a := p.tokens.commit()
+	return &ast.MapEntryExpr{key, val, a}, true
 }
 
 // parse a set of pipeExprs in an enclosure, eg [1, 2]
-func (p *Parser) parseEnclosure(begin, end, sep lexer.Token, subParser func() (ast.Expr, bool)) ([]ast.Expr, lexer.Position, bool) {
+func (p *Parser) parseEnclosure(begin, end, sep lexer.Token, subParser func() (ast.Expr, bool)) ([]ast.Expr, lexer.Area, bool) {
 	p.tokens.begin()
 
-	beg, ok := p.tokens.expectGet(begin)
+	ok := p.tokens.expect(begin)
 	if !ok {
 		p.tokens.rollback()
-		return nil, lexer.Position{}, false
+		return nil, lexer.Area{}, false
 	}
 
 	elems := []ast.Expr{}
@@ -1148,12 +1160,12 @@ func (p *Parser) parseEnclosure(begin, end, sep lexer.Token, subParser func() (a
 	if !p.tokens.expect(end) {
 		p.tokens.popEolSignificance()
 		p.tokens.rollback()
-		return nil, lexer.Position{}, false
+		return nil, lexer.Area{}, false
 	}
 
 	p.tokens.popEolSignificance()
-	p.tokens.commit()
-	return elems, beg.Pos, true
+	a := p.tokens.commit()
+	return elems, a, true
 }
 
 func (p *Parser) parseBinaryOpExpr(operators []string, subParser func() (ast.Expr, bool)) (ast.Expr, bool) {
@@ -1179,12 +1191,12 @@ func (p *Parser) parseBinaryOpExpr(operators []string, subParser func() (ast.Exp
 			p.tokens.pop()
 			right, ok := subParser()
 			if ok {
-				expr = &ast.OpExpr{expr, right, op.Lit}
+				expr = &ast.OpExpr{expr, right, op.Lit, expr.GetArea().To(right.GetArea())}
 			} else {
 				// Continue parsing anyway
-				p.error(fmt.Sprintf("Expected an expression after this '%s'", op.Lit), op.Pos)
+				p.error(fmt.Sprintf("Expected an expression after this '%s'", op.Lit), op.Area)
 				p.tokens.commit()
-				return &ast.Bad{op.Pos}, true
+				return &ast.Bad{op.Area}, true
 			}
 		} else {
 			p.tokens.commit()
@@ -1221,14 +1233,14 @@ func (p *Parser) parseBinaryOpRightAssocExpr(operators []string, subParser func(
 	p.tokens.pop()
 	right, ok := p.parseBinaryOpRightAssocExpr(operators, subParser)
 	if ok {
-		expr = &ast.OpExpr{expr, right, op.Lit}
+		expr = &ast.OpExpr{expr, right, op.Lit, expr.GetArea().To(right.GetArea())}
 		p.tokens.commit()
 		return expr, true
 	} else {
 		// Continue parsing anyway
-		p.error(fmt.Sprintf("Expected an expression after this '%s'", op.Lit), op.Pos)
+		p.error(fmt.Sprintf("Expected an expression after this '%s'", op.Lit), op.Area)
 		p.tokens.commit()
-		return &ast.Bad{op.Pos}, true
+		return &ast.Bad{op.Area}, true
 	}
 }
 
@@ -1238,7 +1250,7 @@ func (p *Parser) parseBracedBlock(name string) (ast.Expr, bool) {
 
 	ok := p.tokens.expect(lexer.LBRACE)
 	if !ok {
-		p.error(fmt.Sprintf("Expected \"{\" as start of %s-block, found %s", name, p.tokens.peek().Lit), p.tokens.peek().Pos)
+		p.error(fmt.Sprintf("Expected \"{\" as start of %s-block, found %s", name, p.tokens.peek().Lit), p.tokens.peek().Area)
 		p.tokens.popEolSignificance()
 		p.tokens.rollback()
 		return nil, false
@@ -1246,7 +1258,7 @@ func (p *Parser) parseBracedBlock(name string) (ast.Expr, bool) {
 
 	block, ok := p.parseBlockExpr()
 	if !ok {
-		p.error(fmt.Sprintf("Expected inner expression in block, found %s", p.tokens.peek().Lit), p.tokens.peek().Pos)
+		p.error(fmt.Sprintf("Expected inner expression in block, found %s", p.tokens.peek().Lit), p.tokens.peek().Area)
 		p.tokens.popEolSignificance()
 		p.tokens.rollback()
 		return nil, false
@@ -1254,7 +1266,7 @@ func (p *Parser) parseBracedBlock(name string) (ast.Expr, bool) {
 
 	_, ok = p.tokens.expectGet(lexer.RBRACE)
 	if !ok {
-		p.error(fmt.Sprintf("Unexpected %s, expected expression or \"}\"", p.tokens.peek().Lit), p.tokens.peek().Pos)
+		p.error(fmt.Sprintf("Unexpected %s, expected expression or \"}\"", p.tokens.peek().Lit), p.tokens.peek().Area)
 		p.tokens.popEolSignificance()
 		p.tokens.rollback()
 		return nil, false

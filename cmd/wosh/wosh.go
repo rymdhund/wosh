@@ -41,11 +41,10 @@ func main() {
 
 func runCompiled(block *ast.BlockExpr) {
 	main := &ast.FuncDefExpr{
-		Ident:      &ast.Ident{lexer.Position{0, 0}, "main"},
+		Ident:      &ast.Ident{"main", lexer.Area{}},
 		ClassParam: nil,
 		Params:     []*ast.ParamExpr{},
 		Body:       block,
-		TPos:       lexer.Position{0, 0},
 	}
 	function, err := interpret.Compile(main)
 	if err != nil {

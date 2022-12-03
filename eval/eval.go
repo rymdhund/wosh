@@ -251,7 +251,7 @@ func (runner *Runner) RunSubscrExpr(env *Env, sub *ast.SubscrExpr) (Object, Exce
 
 		v, ok := builtin.Get(o, idx)
 		if !ok {
-			return UnitVal, ExnVal("out of bounds", "", sub.Pos().Line)
+			return UnitVal, ExnVal("out of bounds", "", sub.Start.Line)
 		}
 
 		return v, NoExnVal
@@ -298,7 +298,7 @@ func (runner *Runner) RunAttrExpr(env *Env, sub *ast.AttrExpr) (Object, Exceptio
 	}
 	m := o.Class().Methods[sub.Attr.Name]
 	if m == nil {
-		return UnitVal, ExnVal("no such attribute", sub.Attr.Name, sub.Pos().Line)
+		return UnitVal, ExnVal("no such attribute", sub.Attr.Name, sub.Start.Line)
 	}
 	return m, NoExnVal
 }
@@ -320,7 +320,7 @@ func (runner *Runner) RunCommandExpr(env *Env, cmd *ast.CommandExpr) (Object, Ex
 		if exiterr, ok := err.(*exec.ExitError); ok {
 			// The program has exited with an exit code != 0
 			if status, ok := exiterr.Sys().(syscall.WaitStatus); ok {
-				return UnitVal, ExitVal(status.ExitStatus(), strings.Join(cmd.CmdParts, " "), cmd.Pos().Line)
+				return UnitVal, ExitVal(status.ExitStatus(), strings.Join(cmd.CmdParts, " "), cmd.Start.Line)
 			}
 		}
 		log.Fatalf("Error running command: %s", err)
@@ -360,7 +360,7 @@ func (runner *Runner) RunCallMethod(env *Env, call *ast.CallExpr, attr *ast.Attr
 	// get method
 	fn := o.Class().Methods[attr.Attr.Name]
 	if fn == nil {
-		return UnitVal, ExnVal("No such method", attr.Attr.Name, attr.Pos().Line)
+		return UnitVal, ExnVal("No such method", attr.Attr.Name, attr.Start.Line)
 	}
 
 	return runner.RunCallObj(env, call, fn, o, fmt.Sprintf("%s.%s", o.Class().Name, attr.Attr.Name))
@@ -378,7 +378,7 @@ func (runner *Runner) RunCallIdent(env *Env, call *ast.CallExpr, ident *ast.Iden
 		}
 		s, err := GetString(param)
 		if err != nil {
-			return UnitVal, ExnVal(err.Error(), ident.Name, call.Pos().Line)
+			return UnitVal, ExnVal(err.Error(), ident.Name, call.Start.Line)
 		}
 		env.OutPutStr(s)
 		env.OutPutStr("\n")
@@ -393,7 +393,7 @@ func (runner *Runner) RunCallIdent(env *Env, call *ast.CallExpr, ident *ast.Iden
 		}
 		s, err := GetString(param)
 		if err != nil {
-			return UnitVal, ExnVal(err.Error(), ident.Name, call.Pos().Line)
+			return UnitVal, ExnVal(err.Error(), ident.Name, call.Start.Line)
 		}
 		env.ErrPutStr(s)
 		env.ErrPutStr("\n")
@@ -409,9 +409,9 @@ func (runner *Runner) RunCallIdent(env *Env, call *ast.CallExpr, ident *ast.Iden
 		}
 		s, err := GetString(param)
 		if err != nil {
-			return UnitVal, ExnVal(err.Error(), ident.Name, call.Pos().Line)
+			return UnitVal, ExnVal(err.Error(), ident.Name, call.Start.Line)
 		}
-		return UnitVal, ExnVal(s, "raise", call.Pos().Line)
+		return UnitVal, ExnVal(s, "raise", call.Start.Line)
 	case "str":
 		if len(call.Args) != 1 {
 			panic("Expected 1 argument to str()")
@@ -516,7 +516,7 @@ func (runner *Runner) RunCallObj(env *Env, call *ast.CallExpr, o Object, classAr
 	}
 	res, exn := runner.RunExpr(innerEnv, f.Expr.Body)
 	if exn != NoExnVal {
-		exn.AddStackEntry(StackEntry{name, call.Pos().Line})
+		exn.AddStackEntry(StackEntry{name, call.Start.Line})
 	}
 	return res, exn
 }

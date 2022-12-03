@@ -562,6 +562,7 @@ func TestReturn(t *testing.T) {
 func TestString(t *testing.T) {
 	assertTrue(t, `
 	assert("a" + "b" == "ab", "string addition error")
+	assert(ord("a")  == 97, "ord error")
 	true
 	`,
 	)

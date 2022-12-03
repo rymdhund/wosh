@@ -80,7 +80,7 @@ func builtinAtoi(value Value) Value {
 }
 
 func builtinOrd(value Value) Value {
-	s := []byte(value.(*StringValue).Val)
+	s := []rune(value.(*StringValue).Val)
 	if len(s) != 1 {
 		panic("Ord expected string of length 1")
 	}

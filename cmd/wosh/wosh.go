@@ -13,27 +13,30 @@ import (
 )
 
 func main() {
-	if len(os.Args) != 2 {
-		fmt.Printf("Usage: %s <filename>\n", os.Args[0])
+	if len(os.Args) < 2 {
+		fmt.Printf("Usage: %s <filename> [filenames...]\n", os.Args[0])
 		os.Exit(1)
 	}
-	filename := os.Args[1]
-	content, err := ioutil.ReadFile(filename)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-	p := parser.NewParser(string(content))
-	block, imports, err := p.Parse()
-	if err != nil {
-		fmt.Printf("Parsing error: %s\n", err)
-		os.Exit(1)
-	}
-	if len(imports) > 0 {
-		panic("Imports not implemented")
+	total := ast.BlockExpr{}
+	for _, filename := range os.Args[1:] {
+		content, err := ioutil.ReadFile(filename)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		p := parser.NewParser(string(content))
+		block, imports, err := p.Parse()
+		if err != nil {
+			fmt.Printf("Parsing error: %s\n", err)
+			os.Exit(1)
+		}
+		if len(imports) > 0 {
+			panic("Imports not implemented")
+		}
+		total.Children = append(total.Children, block.Children...)
 	}
 	// runEval(block)
-	runCompiled(block)
+	runCompiled(&total)
 }
 
 func runCompiled(block *ast.BlockExpr) {

@@ -222,22 +222,6 @@ func (c *Compiler) CompileExpr(exp ast.Expr) error {
 			return runner.RunMapExpr(env, v)
 		case *ast.AttrExpr:
 			return runner.RunAttrExpr(env, v)
-		case *ast.ForExpr:
-			for true {
-				cond, exn := runner.RunExpr(env, v.Cond)
-				if exn != NoExnVal {
-					return UnitVal, exn
-				}
-				if GetBool(cond) {
-					_, exn = runner.RunExpr(env, v.Then)
-					if exn != NoExnVal {
-						return UnitVal, exn
-					}
-				} else {
-					break
-				}
-			}
-			return UnitVal, NoExnVal
 		case *ast.CaptureExpr:
 			switch v.Mod {
 			case "", "1":
@@ -737,7 +721,7 @@ func (c *Compiler) CompileIfExpr(iff *ast.IfExpr) error {
 			c.setPlaceholder(jumpPlaceholder, c.chunk.currentPos())
 		}
 	} else {
-		// No else, we return NIL from expr
+		// No else block, we return NIL from expr
 		c.chunk.addOp1(OP_POP, iff.TPos.Line)
 		c.setPlaceholder(lastCondFailed, c.chunk.currentPos())
 		for _, jumpPlaceholder := range endJumpPlaceholders {

@@ -79,12 +79,29 @@ func builtinAtoi(value Value) Value {
 	return NewInt(i)
 }
 
+func builtinOrd(value Value) Value {
+	s := []byte(value.(*StringValue).Val)
+	if len(s) != 1 {
+		panic("Ord expected string of length 1")
+	}
+	return NewInt(int(s[0]))
+}
+
+func builtinAssert(value Value, message Value) Value {
+	if !value.(*BoolValue).Val {
+		panic(fmt.Sprintf("Assertion error: %s", message))
+	}
+	return Nil
+}
+
 func NewVm() *VM {
 	globals := map[string]Value{}
 	globals["readlines"] = NewBuiltin("readlines", 1, builtinReadlines)
 	globals["println"] = NewBuiltin("println", 1, builtinPrintln)
 	globals["atoi"] = NewBuiltin("atoi", 1, builtinAtoi)
 	globals["len"] = NewBuiltin("len", 1, builtinLen)
+	globals["ord"] = NewBuiltin("ord", 1, builtinOrd)
+	globals["assert"] = NewBuiltin("assert", 2, builtinAssert)
 	return &VM{globals: globals}
 }
 
@@ -225,9 +242,9 @@ func (vm *VM) run() (Value, error) {
 		case OP_FALSE:
 			frame.pushStack(NewBool(false))
 		case OP_EQ:
-			doCall := frame.opEq()
-			if doCall {
-				vm.opCall(2)
+			ok := frame.opEq()
+			if !ok {
+				vm.opCallMethod(1, "eq")
 			}
 		case OP_NEG:
 			err := frame.opNeg()
@@ -235,44 +252,44 @@ func (vm *VM) run() (Value, error) {
 				return nil, err
 			}
 		case OP_ADD:
-			doCall, err := frame.opAdd()
+			ok, err := frame.opAdd()
 			if err != nil {
 				return nil, err
 			}
-			if doCall {
-				vm.opCall(2)
+			if !ok {
+				vm.opCallMethod(1, "add")
 			}
 		case OP_SUB:
-			doCall, err := frame.opSub()
+			ok, err := frame.opSub()
 			if err != nil {
 				return nil, err
 			}
-			if doCall {
-				vm.opCall(2)
+			if !ok {
+				vm.opCallMethod(1, "sub")
 			}
 		case OP_MULT:
-			doCall, err := frame.opMult()
+			ok, err := frame.opMult()
 			if err != nil {
 				return nil, err
 			}
-			if doCall {
-				vm.opCall(2)
+			if !ok {
+				vm.opCallMethod(1, "mult")
 			}
 		case OP_DIV:
-			doCall, err := frame.opDiv()
+			ok, err := frame.opDiv()
 			if err != nil {
 				return nil, err
 			}
-			if doCall {
-				vm.opCall(2)
+			if !ok {
+				vm.opCallMethod(1, "div")
 			}
 		case OP_CONS:
-			doCall, err := frame.opCons()
+			ok, err := frame.opCons()
 			if err != nil {
 				return nil, err
 			}
-			if doCall {
-				vm.opCall(2)
+			if !ok {
+				vm.opCallMethod(1, "cons")
 			}
 		case OP_SUB_SLICE:
 			err := frame.opSubSlice()
@@ -280,12 +297,9 @@ func (vm *VM) run() (Value, error) {
 				return nil, err
 			}
 		case OP_LESS:
-			doCall, err := frame.opLess()
+			err := frame.opLess()
 			if err != nil {
 				return nil, err
-			}
-			if doCall {
-				vm.opCall(2)
 			}
 		case OP_LESS_EQ:
 			panic("Not implemented")
@@ -427,20 +441,15 @@ func (frame *CallFrame) opEq() bool {
 		_, ok := b.(*NilValue)
 		frame.pushStack(NewBool(ok))
 	default:
-		method, ok := a.Type().Methods["eq"]
-		if !ok {
-			panic(fmt.Sprintf("No eq method on %s", a.Type().Name))
-		}
-		frame.pushStack(method)
 		frame.pushStack(a)
 		frame.pushStack(b)
-		return true
+		return false
 	}
-	return false
+	return true
 }
 
 // return true if we need to call a function afterwards
-func (frame *CallFrame) opLess() (bool, error) {
+func (frame *CallFrame) opLess() error {
 	b := frame.popStack()
 	a := frame.popStack()
 
@@ -448,21 +457,14 @@ func (frame *CallFrame) opLess() (bool, error) {
 	case *IntValue:
 		r, ok := b.(*IntValue)
 		if !ok {
-			return false, fmt.Errorf("Trying to compare less between %s and %s", a.Type().Name, b.Type().Name)
-		} else {
-			frame.pushStack(NewBool(l.Val < r.Val))
+			return fmt.Errorf("Trying to compare less between %s and %s", a.Type().Name, b.Type().Name)
 		}
+		frame.pushStack(NewBool(l.Val < r.Val))
+		return nil
 	default:
-		method, ok := a.Type().Methods["lt"]
-		if !ok {
-			panic(fmt.Sprintf("No lt method on %s", a.Type().Name))
-		}
-		frame.pushStack(method)
-		frame.pushStack(a)
-		frame.pushStack(b)
-		return true, nil
+		return fmt.Errorf("Trying to compare less between %s and %s", a.Type().Name, b.Type().Name)
 	}
-	return false, nil
+
 }
 
 func (frame *CallFrame) opNeg() error {
@@ -563,69 +565,42 @@ func (frame *CallFrame) opSubscr() error {
 	return nil
 }
 
-// return true if we need to call a function afterwards
+// return true if we could add the the operands
 func (frame *CallFrame) opAdd() (bool, error) {
-	b := frame.popStack()
-	a := frame.popStack()
-
-	switch l := a.(type) {
-	case *IntValue:
-		r, ok := b.(*IntValue)
-		if !ok {
-			return false, fmt.Errorf("Trying to add %s and %s", a.Type().Name, b.Type().Name)
-		} else {
-			frame.pushStack(NewInt(l.Val + r.Val))
-		}
-	case *StringValue:
-		r, ok := b.(*StringValue)
-		if !ok {
-			return false, fmt.Errorf("Trying to add %s and %s", a.Type().Name, b.Type().Name)
-		} else {
-			frame.pushStack(NewString(l.Val + r.Val))
-		}
-	case *ListValue:
-		r, ok := b.(*ListValue)
-		if !ok {
-			return false, fmt.Errorf("Trying to add %s and %s", a.Type().Name, b.Type().Name)
-		} else {
-			frame.pushStack(l.Concat(r))
-		}
-	default:
-		frame.pushStack(a.Type().Methods["add"])
-		frame.pushStack(a)
-		frame.pushStack(b)
+	res, err := builtinAdd(frame.peekStack(1), frame.peekStack(0))
+	if err != nil {
+		return false, err
+	}
+	if res != nil {
+		frame.popStack()
+		frame.popStack()
+		frame.pushStack(res)
 		return true, nil
 	}
-	return false, nil
+	return true, nil
 }
 
 func (frame *CallFrame) opMult() (bool, error) {
-	b := frame.popStack()
-	a := frame.popStack()
-
-	switch l := a.(type) {
+	switch l := frame.peekStack(1).(type) {
 	case *IntValue:
+		b := frame.popStack()
+		a := frame.popStack()
 		r, ok := b.(*IntValue)
 		if !ok {
 			return false, fmt.Errorf("Trying to mult %s and %s", a.Type().Name, b.Type().Name)
-		} else {
-			frame.pushStack(NewInt(l.Val * r.Val))
 		}
-	default:
-		frame.pushStack(a.Type().Methods["mult"])
-		frame.pushStack(a)
-		frame.pushStack(b)
+		frame.pushStack(NewInt(l.Val * r.Val))
 		return true, nil
+	default:
+		return false, nil
 	}
-	return false, nil
 }
 
 func (frame *CallFrame) opSub() (bool, error) {
-	b := frame.popStack()
-	a := frame.popStack()
-
-	switch l := a.(type) {
+	switch l := frame.peekStack(1).(type) {
 	case *IntValue:
+		b := frame.popStack()
+		a := frame.popStack()
 		r, ok := b.(*IntValue)
 		if !ok {
 			return false, fmt.Errorf("Trying to sub %s and %s", a.Type().Name, b.Type().Name)
@@ -633,55 +608,38 @@ func (frame *CallFrame) opSub() (bool, error) {
 			frame.pushStack(NewInt(l.Val - r.Val))
 		}
 	default:
-		frame.pushStack(a.Type().Methods["sub"])
-		frame.pushStack(a)
-		frame.pushStack(b)
-		return true, nil
+		return false, nil
 	}
-	return false, nil
+	return true, nil
 }
 
 func (frame *CallFrame) opDiv() (bool, error) {
-	b := frame.popStack()
-	a := frame.popStack()
-
-	switch l := a.(type) {
+	switch l := frame.peekStack(1).(type) {
 	case *IntValue:
+		b := frame.popStack()
+		a := frame.popStack()
 		r, ok := b.(*IntValue)
 		if !ok {
 			return false, fmt.Errorf("Trying to div %s and %s", a.Type().Name, b.Type().Name)
 		} else {
 			frame.pushStack(NewInt(l.Val / r.Val))
 		}
-	default:
-		frame.pushStack(a.Type().Methods["sub"])
-		frame.pushStack(a)
-		frame.pushStack(b)
 		return true, nil
+	default:
+		return false, nil
 	}
-	return false, nil
 }
 
 func (frame *CallFrame) opCons() (bool, error) {
-	b := frame.popStack()
-	a := frame.popStack()
-	switch l := b.(type) {
+	switch l := frame.peekStack(0).(type) {
 	case *ListValue:
+		frame.popStack()
+		a := frame.popStack()
 		frame.pushStack(ListCons(a, l))
-	default:
-		fmt.Printf("WDF\n")
-		method, ok := a.Type().Methods["cons"]
-		if !ok {
-			return false, fmt.Errorf("No cons method on %s", a.Type().Name)
-		}
-
-		// cons operator is right associative
-		frame.pushStack(method)
-		frame.pushStack(b)
-		frame.pushStack(a)
 		return true, nil
+	default:
+		return false, nil
 	}
-	return false, nil
 }
 
 func (frame *CallFrame) opSubSlice() error {
@@ -740,11 +698,17 @@ func (vm *VM) opCall(arity int) {
 			v := frame.popStack()
 			frame.popStack()
 			frame.pushStack(f(v))
+		} else if arity == 2 {
+			f := fn.Func.(func(Value, Value) Value)
+			b := frame.popStack()
+			a := frame.popStack()
+			frame.popStack()
+			frame.pushStack(f(a, b))
 		} else {
 			panic(fmt.Sprintf("Not implemented arity: %d", arity))
 		}
 	default:
-		panic("Trying to call non closure and non builtin")
+		panic(fmt.Sprintf("Trying to call non closure and non builtin: %v", frame.peekStack(arity)))
 	}
 }
 
@@ -754,7 +718,7 @@ func (vm *VM) opCallMethod(arity int, name string) {
 
 	method, ok := obj.Type().Methods[name]
 	if !ok {
-		panic(fmt.Sprintf("No such method: %s", name))
+		panic(fmt.Sprintf("No such method: %s on %s", name, obj.Type()))
 	}
 
 	closure := NewClosure(method, []*BoxValue{})

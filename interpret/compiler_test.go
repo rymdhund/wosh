@@ -517,7 +517,36 @@ func TestMethodDef(t *testing.T) {
 	}
 
 	[1, 2].head()`,
-		1)
+		1,
+	)
+	assertTrue(
+		t,
+		`
+	fn (lst: List) eq(lst2) {
+		len(lst) == len(lst2)
+	}
+
+	#fn (lst: List) add(lst2) {
+	#	len(lst) + len(lst2)
+	#}
+
+	fn (lst: List) sub(lst2) {
+		len(lst) - len(lst2)
+	}
+
+	fn (lst: List) mult(lst2) {
+		println(lst)
+		println(lst2)
+		len(lst) * len(lst2)
+	}
+	x = [1, 2]
+	y = [3, 4, 3]
+
+	#assert(x + y == 5) cant override add
+	assert(x - y == -1, "sub failed")
+	assert(x * y == 6, "mult failed")
+	[1, 2] == [3, 4]`,
+	)
 }
 
 func TestReturn(t *testing.T) {
@@ -528,4 +557,12 @@ func TestReturn(t *testing.T) {
 	}
 	foo()
 	`, 3)
+}
+
+func TestString(t *testing.T) {
+	assertTrue(t, `
+	assert("a" + "b" == "ab", "string addition error")
+	true
+	`,
+	)
 }

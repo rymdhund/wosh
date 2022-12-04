@@ -42,6 +42,27 @@ func run(t *testing.T, prog string) Value {
 	return v
 }
 
+func assertRes(t *testing.T, prog string, res Value) {
+	t.Helper()
+	main, err := parseMain(prog)
+	if err != nil {
+		t.Fatalf("Error parsing `%s`: %s", prog, err)
+	}
+	function, err := Compile(main)
+	if err != nil {
+		t.Fatalf("Error compiling `%s`: %s", prog, err)
+	}
+
+	vm := NewVm()
+	v, err := vm.Interpret(function)
+	if err != nil {
+		t.Fatalf("Error running `%s`: %s", prog, err)
+	}
+	if !builtinEq(res, v).Val {
+		t.Errorf("Incorrect result on running `%s`, expected %s, got %s", prog, res, v)
+	}
+}
+
 func TestCompile(t *testing.T) {
 	prog := "x = 1"
 	main, err := parseMain(prog)
@@ -506,6 +527,22 @@ func TestList(t *testing.T) {
 	assertInt(t, "[1, 2, 3][:2][0]", 1)
 	assertInt(t, "[1, 2, 3][:2][1]", 2)
 	assertInt(t, "[1, 2, 3][:2][-1]", 2)
+
+	assertInt(t, "[[1],[2]][0][0]", 1)
+	assertInt(t, "[0, 1, 2][2]", 2)
+	assertInt(t, "len([0, 1, 2])", 3)
+	assertInt(t, "[0, 1, 2, 3][1:2][0]", 1)
+	assertInt(t, "len([0, 1, 2, 3][1:2])", 1)
+	assertInt(t, "[0, 1, 2, 3][1:2:1][0]", 1)
+	assertInt(t, "len([0, 1, 2, 3][1:0])", 0)
+	assertInt(t, "[0, 1, 2, 3][-2:-1][0]", 2)
+	assertInt(t, "len([0, 1, 2, 3][-2:-1])", 1)
+	assertInt(t, "len([0, 1][-100:1000])", 2)
+	assertInt(t, "[0, 1, 2][1:][0]", 1)
+	assertInt(t, "[0, 1, 2][:2][-1]", 1)
+	assertInt(t, "[3, 4][:][0]", 3)
+	assertInt(t, "[3, 4][:][1]", 4)
+	assertInt(t, "len([0] + [1])", 2)
 }
 
 func TestMethodDef(t *testing.T) {
@@ -560,10 +597,57 @@ func TestReturn(t *testing.T) {
 }
 
 func TestString(t *testing.T) {
-	assertTrue(t, `
-	assert("a" + "b" == "ab", "string addition error")
-	assert(ord("a")  == 97, "ord error")
-	true
-	`,
-	)
+	assertRes(t, "'abc' + 'def'", NewString("abcdef"))
+	assertRes(t, "ord('a')", NewInt(97))
+	assertRes(t, "'abc'[1:]", NewString("bc"))
+	assertRes(t, "'åäö'[1:]", NewString("äö"))
+	assertRes(t, "'åäö'[1]", NewString("ä"))
+}
+
+func TestSmall(t *testing.T) {
+	tests := []struct {
+		string
+		Value
+	}{
+		{"1 + 2", NewInt(3)},
+		{"(1 + 2)", NewInt(3)},
+		{"2 * 2", NewInt(4)},
+		{"2 + 3 * 4 - 5", NewInt(9)},
+		{"3 + 3 / 3", NewInt(4)},
+		{"3 / 3 + 3", NewInt(4)},
+		{"-2", NewInt(-2)},
+		{"- -2", NewInt(2)},
+		{"-(-2)", NewInt(2)},
+		{"-2 - -2", NewInt(0)},
+		{"4 - 2 - 2", NewInt(0)},
+		{"4 / 2 / 2", NewInt(1)},
+		{"'abc'", NewString("abc")},
+		{"1 == 1", NewBool(true)},
+		{"1 != 1", NewBool(false)},
+		{"1 == 0", NewBool(false)},
+		{"1 != 0", NewBool(true)},
+		{"()", Nil},
+		{"atoi('12')", NewInt(12)},
+		{"'abc' + 'def'", NewString("abcdef")},
+		//{"'one' + str(1)", NewString("one1")},
+		{"'åäö'[1]", NewString("ä")},
+		{"len('abc')", NewInt(3)},
+		{"len('åäö')", NewInt(3)},
+		{"len([1, 2, 3])", NewInt(3)},
+		{"a = 0\n1 + 2", NewInt(3)},
+		{"a = false\n if a { 1 } else { 2 }", NewInt(2)},
+		{`if true { 2 } else { 3 }`, NewInt(2)},
+		{`if 1 == 1 { 2 } else { 3 }`, NewInt(2)},
+		{`if false { 2 }`, Nil},
+		{"println('abc')", Nil},
+		{"a = 1 # test\n# comment\nb=a #comment\nb#comment", NewInt(1)},
+		//{"res <- echo('abc')", NewString("abc\n")},
+		//{"res <-2 echo_err('abc')", NewString("abc\n")},
+		//{"res <- `echo abc`", NewString("abc\n")},
+		//{"res <-2 `../utils/echo_err.sh eee`", NewString("eee\n")},
+	}
+	for _, test := range tests {
+		prog, expected := test.string, test.Value
+		assertRes(t, prog, expected)
+	}
 }

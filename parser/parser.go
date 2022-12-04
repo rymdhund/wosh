@@ -106,13 +106,12 @@ func (p *Parser) showErrors() string {
 			s += "\n\n"
 		}
 		s += fmt.Sprintf("%s, line: %d:%d\n", e.msg, e.area.Start.Line, e.area.Start.Col)
-		s += lines[e.area.Start.Line]
 		length := e.area.End.Col - e.area.Start.Col
 		if !e.area.IsSingleLine() {
 			length = len(lines[e.area.Start.Line]) - e.area.Start.Col
 		}
 		s += lines[e.area.Start.Line]
-		s += fmt.Sprintf("%s%s\n", strings.Repeat(" ", e.area.Start.Col), strings.Repeat("^", length))
+		s += fmt.Sprintf("\n%s%s\n", strings.Repeat(" ", e.area.Start.Col), strings.Repeat("^", length))
 	}
 	return s
 }

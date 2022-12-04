@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 const FRAMES_MAX = 64
@@ -60,7 +61,7 @@ func builtinLen(v Value) Value {
 	case *ListValue:
 		return NewInt(x.len)
 	case *StringValue:
-		return NewInt(len(x.Val))
+		return NewInt(utf8.RuneCountInString(x.Val))
 	default:
 		panic(fmt.Sprintf("%v does not support len()", v))
 	}
@@ -415,36 +416,14 @@ func (frame *CallFrame) opEq() bool {
 	b := frame.popStack()
 	a := frame.popStack()
 
-	switch t := a.(type) {
-	case *IntValue:
-		i2, ok := b.(*IntValue)
-		if !ok {
-			frame.pushStack(NewBool(false))
-		} else {
-			frame.pushStack(NewBool(t.Val == i2.Val))
-		}
-	case *StringValue:
-		s2, ok := b.(*StringValue)
-		if !ok {
-			frame.pushStack(NewBool(false))
-		} else {
-			frame.pushStack(NewBool(t.Val == s2.Val))
-		}
-	case *BoolValue:
-		b2, ok := b.(*BoolValue)
-		if !ok {
-			frame.pushStack(NewBool(false))
-		} else {
-			frame.pushStack(NewBool(t.Val == b2.Val))
-		}
-	case *NilValue:
-		_, ok := b.(*NilValue)
-		frame.pushStack(NewBool(ok))
-	default:
+	v := builtinEq(a, b)
+	if v == nil {
 		frame.pushStack(a)
 		frame.pushStack(b)
 		return false
 	}
+
+	frame.pushStack(v)
 	return true
 }
 
@@ -669,7 +648,7 @@ func (frame *CallFrame) opSubSlice() error {
 		frame.pushStack(newList)
 	case *StringValue:
 		to := intOr(b, v.Len())
-		newString := NewString(v.Val[from:to])
+		newString := NewString(string([]rune(v.Val)[from:to]))
 		frame.pushStack(newString)
 	default:
 		panic("Subslice on non-suported value")

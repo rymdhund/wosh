@@ -103,6 +103,13 @@ func NewVm() *VM {
 	globals["len"] = NewBuiltin("len", 1, builtinLen)
 	globals["ord"] = NewBuiltin("ord", 1, builtinOrd)
 	globals["assert"] = NewBuiltin("assert", 2, builtinAssert)
+
+	globals["Bool"] = NewTypeValue(BoolType)
+	globals["Int"] = NewTypeValue(IntType)
+	globals["String"] = NewTypeValue(StringType)
+	globals["List"] = NewTypeValue(ListType)
+	globals["Map"] = NewTypeValue(MapType)
+
 	return &VM{globals: globals}
 }
 
@@ -118,6 +125,10 @@ func (frame *CallFrame) popStack() Value {
 
 func (frame *CallFrame) peekStack(offset int) Value {
 	return frame.stack[frame.stackTop-1-offset]
+}
+
+func (frame *CallFrame) replaceStack(offset int, v Value) {
+	frame.stack[frame.stackTop-1-offset] = v
 }
 
 func (vm *VM) NewFrame(cl *ClosureValue, args []Value, returnFrame *CallFrame, returnIp int) *CallFrame {
@@ -390,6 +401,9 @@ func (vm *VM) run() (Value, error) {
 			arity := int(frame.readCode())
 			method := frame.readName()
 			vm.opCallMethod(arity, method)
+		case OP_ATTR:
+			attr := frame.readName()
+			vm.opAttr(attr)
 		case OP_SET_HANDLER:
 			effect := frame.readName()
 			handlerIp := frame.readUint16()
@@ -673,12 +687,18 @@ func (vm *VM) opCall(arity int) {
 		frame.stackTop -= arity + 1
 	case *BuiltinValue:
 		if arity == 1 {
-			f := fn.Func.(func(Value) Value)
+			f, ok := fn.Func.(func(Value) Value)
+			if !ok {
+				panic(fmt.Sprintf("Calling builtin function '%s' with wrong number of arguments, expected %d", fn.Name, arity))
+			}
 			v := frame.popStack()
 			frame.popStack()
 			frame.pushStack(f(v))
 		} else if arity == 2 {
-			f := fn.Func.(func(Value, Value) Value)
+			f, ok := fn.Func.(func(Value, Value) Value)
+			if !ok {
+				panic(fmt.Sprintf("Calling builtin function '%s' with wrong number of arguments, expected %d", fn.Name, arity))
+			}
 			b := frame.popStack()
 			a := frame.popStack()
 			frame.popStack()
@@ -695,6 +715,19 @@ func (vm *VM) opCallMethod(arity int, name string) {
 	frame := vm.currentFrame
 	obj := frame.peekStack(arity)
 
+	// Special case for type values
+	t, ok := obj.(*TypeValue)
+	if ok {
+		method, ok := t.typ.Methods[name]
+		if !ok {
+			panic(fmt.Sprintf("No such attribute: %s on %s", name, obj.Type()))
+		}
+		closure := NewClosure(method, []*BoxValue{})
+		frame.replaceStack(arity, closure)
+		vm.opCall(arity)
+		return
+	}
+
 	method, ok := obj.Type().Methods[name]
 	if !ok {
 		panic(fmt.Sprintf("No such method: %s on %s", name, obj.Type()))
@@ -705,6 +738,25 @@ func (vm *VM) opCallMethod(arity int, name string) {
 	newFrame := vm.NewFrame(closure, frame.stack[frame.stackTop-arity-1:frame.stackTop], frame, frame.ip)
 	vm.currentFrame = newFrame
 	frame.stackTop -= arity + 1
+}
+
+func (vm *VM) opAttr(name string) {
+	frame := vm.currentFrame
+	obj := frame.popStack()
+
+	// So far we only have attribute for type methods (like `List.head`)
+	t, ok := obj.(*TypeValue)
+	if ok {
+		method, ok := t.typ.Methods[name]
+		if !ok {
+			panic(fmt.Sprintf("No such attribute: %s on %s", name, obj.Type()))
+		}
+		closure := NewClosure(method, []*BoxValue{})
+		frame.pushStack(closure)
+	} else {
+		panic(fmt.Sprintf("Cant fetch attribute from: %s on (%s)", obj, name))
+
+	}
 }
 
 func (frame *CallFrame) findHandler(name string) *Handler {

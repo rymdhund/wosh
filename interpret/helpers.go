@@ -58,6 +58,13 @@ func builtinEq(a, b Value) *BoolValue {
 	case *NilValue:
 		_, ok := b.(*NilValue)
 		return NewBool(ok)
+	case *TypeValue:
+		t2, ok := b.(*TypeValue)
+		if !ok {
+			return NewBool(false)
+		} else {
+			return NewBool(t.typ == t2.typ)
+		}
 	default:
 		return nil
 	}

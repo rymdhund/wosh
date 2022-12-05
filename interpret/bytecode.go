@@ -60,6 +60,9 @@ const (
 	// Takes one parameter: arity top of stack is supposed to be : [..., fn_obj, arg1, arg2].  Puts the result back on top of stack
 	OP_CALL
 
+	// Takes name parameter and looks up name on value
+	OP_ATTR
+
 	// Takes two parameters: Arity and Name of method
 	// Will look up method with 'name' on an object and call that
 	// Top of stack is supposed to be : [..., obj, arg1, arg2]
@@ -117,6 +120,7 @@ var op_names = []struct {
 	OP_SUBSCRIPT_BINARY: {"OP_SUBSCRIPT_BINARY", 1},
 	OP_CONS:             {"OP_CONS", 1},
 	OP_SUB_SLICE:        {"OP_SUB_SLICE", 1},
+	OP_ATTR:             {"OP_ATTR", 2},
 	OP_CALL:             {"OP_CALL", 2},
 	OP_CALL_METHOD:      {"OP_CALL_METHOD", 3},
 	OP_CREATE_LIST:      {"OP_CREATE_LIST", 2},

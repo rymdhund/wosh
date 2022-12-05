@@ -217,11 +217,11 @@ func (c *Compiler) CompileExpr(exp ast.Expr) error {
 		return c.CompileSubSlice(v)
 	case *ast.ReturnExpr:
 		return c.CompileReturnExpr(v)
+	case *ast.AttrExpr:
+		return c.CompileAttrExpr(v)
 	/*
 		case *ast.MapExpr:
 			return runner.RunMapExpr(env, v)
-		case *ast.AttrExpr:
-			return runner.RunAttrExpr(env, v)
 		case *ast.CaptureExpr:
 			switch v.Mod {
 			case "", "1":
@@ -814,4 +814,17 @@ func (c *Compiler) CompileReturnExpr(ret *ast.ReturnExpr) error {
 	c.chunk.addOp1(OP_RETURN, ret.StartLine())
 
 	return nil
+}
+
+func (c *Compiler) CompileAttrExpr(attr *ast.AttrExpr) error {
+	err := c.CompileExpr(attr.Lhs)
+	if err != nil {
+		return err
+	}
+
+	nameId := c.getOrSetName(attr.Attr.Name)
+	c.chunk.addOp2(OP_ATTR, Op(nameId), attr.StartLine())
+
+	return nil
+
 }

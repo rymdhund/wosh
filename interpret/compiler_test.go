@@ -42,6 +42,10 @@ func run(t *testing.T, prog string) Value {
 	return v
 }
 
+func testEqual(v1, v2 Value) bool {
+	return builtinEq(v1, v2).Val
+}
+
 func assertRes(t *testing.T, prog string, res Value) {
 	t.Helper()
 	main, err := parseMain(prog)
@@ -58,7 +62,7 @@ func assertRes(t *testing.T, prog string, res Value) {
 	if err != nil {
 		t.Fatalf("Error running `%s`: %s", prog, err)
 	}
-	if !builtinEq(res, v).Val {
+	if !testEqual(res, v) {
 		t.Errorf("Incorrect result on running `%s`, expected %s, got %s", prog, res, v)
 	}
 }
@@ -96,67 +100,84 @@ func TestAdd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !Equal(NewInt(2), v) {
+	if !testEqual(NewInt(2), v) {
 		t.Error("Expected 2")
 	}
 }
 
+func TestLiterals(t *testing.T) {
+	tests := []struct {
+		string
+		Value
+	}{
+		{"123", NewInt(123)},
+		{"\"abc\"", NewString("abc")},
+		{"'abc'", NewString("abc")},
+		{"true", NewBool(true)},
+		{"false", NewBool(false)},
+		{"List", NewTypeValue(ListType)},
+	}
+	for _, test := range tests {
+		prog, expected := test.string, test.Value
+		assertRes(t, prog, expected)
+	}
+}
 func TestIf(t *testing.T) {
 	res := run(t, "if 1 == 1 { 2 } else { 3 }")
-	if !Equal(res, NewInt(2)) {
+	if !testEqual(res, NewInt(2)) {
 		t.Errorf("expected 2, got %s", res)
 	}
 
 	res = run(t, "if 1 == 2 { 3 } else { 4 }")
-	if !Equal(res, NewInt(4)) {
+	if !testEqual(res, NewInt(4)) {
 		t.Errorf("expected 4, got %s", res)
 	}
 
 	res = run(t, "x = 0 \n if 1 == 1 { x = 10 } \n x")
-	if !Equal(res, NewInt(10)) {
+	if !testEqual(res, NewInt(10)) {
 		t.Errorf("expected 10, got %s", res)
 	}
 
 	res = run(t, "x = 0 \n if 1 == 2 { x = 10 } \n x")
-	if !Equal(res, NewInt(0)) {
+	if !testEqual(res, NewInt(0)) {
 		t.Errorf("expected 0, got %s", res)
 	}
 
 	// Else If
 	res = run(t, "if 1 == 1 { 1 } else if 1 == 1 { 2 } else { 3 }")
-	if !Equal(res, NewInt(1)) {
+	if !testEqual(res, NewInt(1)) {
 		t.Errorf("expected 1, got %s", res)
 	}
 
 	res = run(t, "if 1 == 2 { 1 } else if 1 == 1 { 2 } else { 3 }")
-	if !Equal(res, NewInt(2)) {
+	if !testEqual(res, NewInt(2)) {
 		t.Errorf("expected 2, got %s", res)
 	}
 
 	res = run(t, "if 1 == 2 { 1 } else if 2 == 1 { 2 } else { 3 }")
-	if !Equal(res, NewInt(3)) {
+	if !testEqual(res, NewInt(3)) {
 		t.Errorf("expected 3, got %s", res)
 	}
 
 	res = run(t, "if 1 == 2 { 1 } else if 2 == 1 { 2 } else if 3 == 3 { 3 } else { 4 }")
-	if !Equal(res, NewInt(3)) {
+	if !testEqual(res, NewInt(3)) {
 		t.Errorf("expected 3, got %s", res)
 	}
 }
 
 func TestFor(t *testing.T) {
 	res := run(t, "x = 1 \n for x == 1 { x = x + 1 } \n x")
-	if !Equal(res, NewInt(2)) {
+	if !testEqual(res, NewInt(2)) {
 		t.Errorf("expected 2, got %s", res)
 	}
 
 	res = run(t, "x = 1 \n for x < 10 { x = x + 1 } \n x")
-	if !Equal(res, NewInt(10)) {
+	if !testEqual(res, NewInt(10)) {
 		t.Errorf("expected 10, got %s", res)
 	}
 
 	res = run(t, "x = 1 \n for false { x = x + 1 } \n x")
-	if !Equal(res, NewInt(1)) {
+	if !testEqual(res, NewInt(1)) {
 		t.Errorf("expected 1, got %s", res)
 	}
 }
@@ -178,46 +199,46 @@ func TestFnDef(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !Equal(v, Nil) {
+	if !testEqual(v, Nil) {
 		t.Errorf("Expected Nil, got %s", v)
 	}
 }
 
 func TestCall(t *testing.T) {
 	res := run(t, "fn x(y) { y + 1} \n x(4)")
-	if !Equal(res, NewInt(5)) {
+	if !testEqual(res, NewInt(5)) {
 		t.Errorf("expected 5, got %s", res)
 	}
 
 	res = run(t, "fn x(y) { y + 2} \n 1 + x(x(2))")
-	if !Equal(res, NewInt(7)) {
+	if !testEqual(res, NewInt(7)) {
 		t.Errorf("expected 7, got %s", res)
 	}
 
 	res = run(t, "fn x(y) { y + 2} \n 1 + x(x(2) + 1)")
-	if !Equal(res, NewInt(8)) {
+	if !testEqual(res, NewInt(8)) {
 		t.Errorf("expected 8, got %s", res)
 	}
 
 	res = run(t, "fn x(y) { z = y + 2 \n z + 1} \n x(1)")
-	if !Equal(res, NewInt(4)) {
+	if !testEqual(res, NewInt(4)) {
 		t.Errorf("expected 4, got %s", res)
 	}
 }
 
 func TestClosure(t *testing.T) {
 	res := run(t, "fn f() { a = 1\n fn g() { a }\n g} \n b = f()\n b()")
-	if !Equal(res, NewInt(1)) {
+	if !testEqual(res, NewInt(1)) {
 		t.Errorf("expected 1, got %s", res)
 	}
 
 	res = run(t, "fn f() { a = 1\n fn g() { a = a + 1 }\n g()\n a} \n f()")
-	if !Equal(res, NewInt(2)) {
+	if !testEqual(res, NewInt(2)) {
 		t.Errorf("expected 2, got %s", res)
 	}
 
 	res = run(t, "fn f() { a = 1\n fn g() { a = 2 }\n g()\n a} \n f()")
-	if !Equal(res, NewInt(2)) {
+	if !testEqual(res, NewInt(2)) {
 		t.Errorf("expected 2, got %s", res)
 	}
 
@@ -236,7 +257,7 @@ func TestClosure(t *testing.T) {
 	}
 	f()
 	`)
-	if !Equal(res, NewInt(2)) {
+	if !testEqual(res, NewInt(2)) {
 		t.Errorf("expected 2, got %s", res)
 	}
 
@@ -251,7 +272,7 @@ func TestClosure(t *testing.T) {
 	add3 = f(3)
 	add1(2) + add3(4)
 	`)
-	if !Equal(res, NewInt(10)) {
+	if !testEqual(res, NewInt(10)) {
 		t.Errorf("expected 10, got %s", res)
 	}
 }
@@ -269,7 +290,7 @@ func TestTry(t *testing.T) {
 	}
 	foo()
 	`)
-	if !Equal(res, NewInt(1)) {
+	if !testEqual(res, NewInt(1)) {
 		t.Errorf("expected 1, got %s", res)
 	}
 }
@@ -290,7 +311,7 @@ func TestTry2(t *testing.T) {
 	}
 	foo()
 	`)
-	if !Equal(res, NewInt(1)) {
+	if !testEqual(res, NewInt(1)) {
 		t.Errorf("expected 1, got %s", res)
 	}
 }
@@ -313,7 +334,7 @@ func TestTry3(t *testing.T) {
 	}
 	foo()
 	`)
-	if !Equal(res, NewInt(3)) {
+	if !testEqual(res, NewInt(3)) {
 		t.Errorf("expected 3, got %s", res)
 	}
 }
@@ -339,7 +360,7 @@ func TestTry4(t *testing.T) {
 	}
 	foo()
 	`)
-	if !Equal(res, NewInt(3)) {
+	if !testEqual(res, NewInt(3)) {
 		t.Errorf("expected 3, got %s", res)
 	}
 }
@@ -369,7 +390,7 @@ func TestTry5(t *testing.T) {
 	}
 	foo()
 	`)
-	if !Equal(res, NewInt(3)) {
+	if !testEqual(res, NewInt(3)) {
 		t.Errorf("expected 3, got %s", res)
 	}
 }
@@ -384,7 +405,7 @@ func TestTry6(t *testing.T) {
 		}
 	}
 	`)
-	if !Equal(res, NewInt(3)) {
+	if !testEqual(res, NewInt(3)) {
 		t.Errorf("expected 3, got %s", res)
 	}
 }
@@ -400,7 +421,7 @@ func TestTry7(t *testing.T) {
 		}
 	}
 	`)
-	if !Equal(res, NewInt(4)) {
+	if !testEqual(res, NewInt(4)) {
 		t.Errorf("expected 4, got %s", res)
 	}
 }
@@ -429,7 +450,7 @@ func TestTry8(t *testing.T) {
 	}
 	foo()
 	`)
-	if !Equal(res, NewInt(113)) {
+	if !testEqual(res, NewInt(113)) {
 		t.Errorf("expected 113, got %s", res)
 	}
 }
@@ -437,7 +458,7 @@ func TestTry8(t *testing.T) {
 func assertFalse(t *testing.T, prog string) {
 	t.Helper()
 	res := run(t, prog)
-	if !Equal(res, NewBool(false)) {
+	if !testEqual(res, NewBool(false)) {
 		t.Errorf("expected false, got %s", res)
 	}
 }
@@ -445,7 +466,7 @@ func assertFalse(t *testing.T, prog string) {
 func assertTrue(t *testing.T, prog string) {
 	t.Helper()
 	res := run(t, prog)
-	if !Equal(res, NewBool(true)) {
+	if !testEqual(res, NewBool(true)) {
 		t.Errorf("expected true, got %s", res)
 	}
 }
@@ -453,7 +474,7 @@ func assertTrue(t *testing.T, prog string) {
 func assertInt(t *testing.T, prog string, value int) {
 	t.Helper()
 	res := run(t, prog)
-	if !Equal(res, NewInt(value)) {
+	if !testEqual(res, NewInt(value)) {
 		t.Errorf("expected %d, got %s", value, res)
 	}
 }
@@ -546,19 +567,20 @@ func TestList(t *testing.T) {
 }
 
 func TestMethodDef(t *testing.T) {
-	assertInt(
-		t,
-		`
+	run(t, `
 	fn (lst: List) head() {
 		lst[0]
 	}
 
-	[1, 2].head()`,
-		1,
-	)
-	assertTrue(
-		t,
-		`
+	assert([1, 2].head() == 1, "[1, 2].head() fail")
+
+	x = List.head
+	assert(x([1, 2]) == 1, "List.head fail 2")
+
+	assert(List.head([1, 2]) == 1, "List.head fail 3")
+	`)
+
+	run(t, `
 	fn (lst: List) eq(lst2) {
 		len(lst) == len(lst2)
 	}
@@ -582,8 +604,8 @@ func TestMethodDef(t *testing.T) {
 	#assert(x + y == 5) cant override add
 	assert(x - y == -1, "sub failed")
 	assert(x * y == 6, "mult failed")
-	[1, 2] == [3, 4]`,
-	)
+	assert([1, 2] == [3, 4], "eq failed")
+	`)
 }
 
 func TestReturn(t *testing.T) {

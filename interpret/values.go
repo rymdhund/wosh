@@ -31,6 +31,7 @@ var ExceptionType = &Type{"Exception", FunctionMap{}}
 var BoxType = &Type{"Box", FunctionMap{}}
 var ContinuationType = &Type{"Continuation", FunctionMap{}}
 var BuiltinType = &Type{"Builtin", FunctionMap{}}
+var TypeType = &Type{"Type", FunctionMap{}}
 
 var types = map[string]*Type{
 	"Nil":  NilType,
@@ -53,34 +54,20 @@ type Value interface {
 	String() string
 }
 
-func Equal(v1, v2 Value) bool {
-	switch x1 := v1.(type) {
-	case *IntValue:
-		x2, ok := v2.(*IntValue)
-		if !ok {
-			return false
-		}
-		return x1.Val == x2.Val
-	case *StringValue:
-		x2, ok := v2.(*StringValue)
-		if !ok {
-			return false
-		}
-		return x1.Val == x2.Val
-	case *BoolValue:
-		x2, ok := v2.(*BoolValue)
-		if !ok {
-			return false
-		}
-		return x1.Val == x2.Val
-	case *NilValue:
-		_, ok := v2.(*NilValue)
-		if !ok {
-			return false
-		}
-		return true
-	}
-	return false
+type TypeValue struct {
+	typ *Type
+}
+
+func NewTypeValue(t *Type) *TypeValue {
+	return &TypeValue{t}
+}
+
+func (t *TypeValue) Type() *Type {
+	return TypeType
+}
+
+func (t *TypeValue) String() string {
+	return fmt.Sprintf("%s(%s)", t.Type().Name, t.typ.Name)
 }
 
 type FunctionValue struct {

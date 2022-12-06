@@ -308,6 +308,11 @@ func (vm *VM) run() (Value, error) {
 			if err != nil {
 				return nil, err
 			}
+		case OP_SUBSCRIPT_ASSIGN:
+			err := frame.opSubAssign()
+			if err != nil {
+				return nil, err
+			}
 		case OP_LESS:
 			err := frame.opLess()
 			if err != nil {
@@ -338,6 +343,9 @@ func (vm *VM) run() (Value, error) {
 		case OP_CREATE_LIST:
 			size := int(frame.readCode())
 			frame.opCreateList(size)
+		case OP_CREATE_MAP:
+			size := int(frame.readCode())
+			frame.opCreateMap(size)
 		case OP_POP:
 			frame.popStack()
 		case OP_SWAP:
@@ -524,22 +532,7 @@ func (frame *CallFrame) opSubscr() error {
 	b := frame.popStack()
 	a := frame.popStack()
 
-	switch l := a.(type) {
-	case *ListValue:
-		r, ok := b.(*IntValue)
-		if !ok {
-			return fmt.Errorf("Trying to subscript %s with %s", a.Type().Name, b.Type().Name)
-		} else {
-			idx := r.Val
-			if idx < 0 {
-				idx = l.len + idx
-			}
-			val, ok := l.Get(idx)
-			if !ok {
-				return fmt.Errorf("List index out of bounds %d", r.Val)
-			}
-			frame.pushStack(val)
-		}
+	switch v := a.(type) {
 	case *StringValue:
 		r, ok := b.(*IntValue)
 		if !ok {
@@ -547,10 +540,36 @@ func (frame *CallFrame) opSubscr() error {
 		} else {
 			idx := r.Val
 			if idx < 0 {
-				idx = l.Len() - idx
+				idx = v.Len() - idx
 			}
-			val := []rune(l.Val)[idx]
+			val := []rune(v.Val)[idx]
 			frame.pushStack(NewString(string(val)))
+		}
+	case *ListValue:
+		r, ok := b.(*IntValue)
+		if !ok {
+			return fmt.Errorf("Trying to subscript %s with %s", a.Type().Name, b.Type().Name)
+		} else {
+			idx := r.Val
+			if idx < 0 {
+				idx = v.len + idx
+			}
+			val, ok := v.Get(idx)
+			if !ok {
+				return fmt.Errorf("List index out of bounds %d", r.Val)
+			}
+			frame.pushStack(val)
+		}
+	case *MapValue:
+		key, ok := b.(*StringValue)
+		if !ok {
+			return fmt.Errorf("Trying to subscript %s with %s", a.Type().Name, b.Type().Name)
+		} else {
+			val, ok := v.Get(key.Val)
+			if !ok {
+				return fmt.Errorf("Non-existing map key: \"%s\"", key.Val)
+			}
+			frame.pushStack(val)
 		}
 	default:
 		return fmt.Errorf("Trying to subscript %s with %s", a.Type().Name, b.Type().Name)
@@ -670,10 +689,40 @@ func (frame *CallFrame) opSubSlice() error {
 	return nil
 }
 
+func (frame *CallFrame) opSubAssign() error {
+	key := frame.popStack()
+	obj := frame.popStack()
+	value := frame.popStack()
+
+	switch v := obj.(type) {
+	case *MapValue:
+		k, ok := key.(*StringValue)
+		if !ok {
+			panic("Non-string key in map assignment")
+		}
+		v.Set(k.Val, value)
+		return nil
+	}
+	return fmt.Errorf("Can't subscript assign to %v", obj)
+}
+
 func (frame *CallFrame) opCreateList(size int) {
 	v := ListNil()
 	for i := 0; i < size; i++ {
 		v = ListCons(frame.popStack(), v)
+	}
+	frame.pushStack(v)
+}
+
+func (frame *CallFrame) opCreateMap(size int) {
+	v := NewMap()
+	for i := 0; i < size; i++ {
+		value := frame.popStack()
+		key, ok := frame.popStack().(*StringValue)
+		if !ok {
+			panic("Expected string key in map")
+		}
+		v.Set(key.Val, value)
 	}
 	frame.pushStack(v)
 }

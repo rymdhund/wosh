@@ -270,13 +270,14 @@ func parseForTest(t *testing.T, prog string) *ast.BlockExpr {
 	return exprs
 }
 
-func TestParseMisc(t *testing.T) {
+func TestParseAssignAdd(t *testing.T) {
 	tree := parseForTest(t, "a = 1 + 2")
 	assign, ok := tree.Children[0].(*ast.AssignExpr)
 	if !ok {
 		t.Errorf("Expected OpExpr, got %+v", tree.Children[0])
 	}
-	if assign.Ident.Name != "a" {
+	i := assign.Left.(*ast.Ident)
+	if i.Name != "a" {
 		t.Errorf("Invalid name")
 	}
 	add, ok := assign.Right.(*ast.OpExpr)
@@ -317,6 +318,24 @@ func TestParseReturn(t *testing.T) {
 		_, ok := exprs.Children[0].(*ast.ReturnExpr)
 		if !ok {
 			t.Errorf("expected return expr, got %+v", exprs.Children[0])
+		}
+	}
+}
+
+func TestParseMisc(t *testing.T) {
+	tests := []string{
+		"a['a'] = 1",
+		"a[1] = 1",
+	}
+	for _, prog := range tests {
+		p := NewParser(prog)
+		exprs, _, err := p.Parse()
+		if err != nil {
+			t.Error(err)
+		}
+		_, ok := exprs.Children[0].(*ast.AssignExpr)
+		if !ok {
+			t.Errorf("expected AssignExpr, got %+v", exprs.Children[0])
 		}
 	}
 }

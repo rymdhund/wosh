@@ -51,7 +51,7 @@ func (runner *Runner) RunExpr(env *Env, exp ast.Expr) (Object, Exception) {
 		if exn != NoExnVal {
 			return UnitVal, exn
 		}
-		env.put(v.Ident.Name, obj)
+		env.put(v.Left.(*ast.Ident).Name, obj)
 		return UnitVal, NoExnVal
 	case *ast.BasicLit:
 		return objectFromBasicLit(v)
@@ -103,7 +103,7 @@ func (runner *Runner) RunExpr(env *Env, exp ast.Expr) (Object, Exception) {
 			env.SetCaptureOutput()
 			ret, exn := runner.RunExpr(env, v.Right)
 			// Pop output even on exceptions
-			env.put(v.Ident.Name, env.PopCaptureOutput())
+			env.put(v.Ident.(*ast.Ident).Name, env.PopCaptureOutput())
 			if exn != NoExnVal {
 				return UnitVal, exn
 			}
@@ -112,7 +112,7 @@ func (runner *Runner) RunExpr(env *Env, exp ast.Expr) (Object, Exception) {
 			env.SetCaptureErr()
 			ret, exn := runner.RunExpr(env, v.Right)
 			// Pop output even on exceptions
-			env.put(v.Ident.Name, env.PopCaptureErr())
+			env.put(v.Ident.(*ast.Ident).Name, env.PopCaptureErr())
 			if exn != NoExnVal {
 				return UnitVal, exn
 			}
@@ -120,9 +120,9 @@ func (runner *Runner) RunExpr(env *Env, exp ast.Expr) (Object, Exception) {
 		case "?":
 			ret, exn := runner.RunExpr(env, v.Right)
 			if exn != NoExnVal {
-				env.put(v.Ident.Name, exn)
+				env.put(v.Ident.(*ast.Ident).Name, exn)
 			} else {
-				env.put(v.Ident.Name, UnitVal)
+				env.put(v.Ident.(*ast.Ident).Name, UnitVal)
 			}
 			return ret, NoExnVal
 		default:

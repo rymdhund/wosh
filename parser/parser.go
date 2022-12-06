@@ -22,8 +22,7 @@ import (
 //
 // AssignExpr ->
 //   | IdentExpr "<-" (ModExpr)? AssignExpr
-//   | IdentExpr "=" AssignExpr
-//   | PipeExpr
+//   | PipeExpr ("=" AssignExpr)*
 //
 // PipeExpr ->
 //   | RedirectExpr ('|[oe]' PipeExpr)*
@@ -73,24 +72,19 @@ import (
 
 const DEBUG = true
 
-type ParserError struct {
-	msg  string
-	area lexer.Area
-}
-
 type Parser struct {
 	source string
 	tokens *TokenReader
-	errors []ParserError
+	errors []ast.CodeError
 }
 
 func NewParser(input string) *Parser {
-	p := Parser{input, nil, []ParserError{}}
+	p := Parser{input, nil, []ast.CodeError{}}
 	return &p
 }
 
 func (p *Parser) error(msg string, pos lexer.Area) {
-	err := ParserError{msg, pos}
+	err := ast.CodeError{msg, pos}
 	p.errors = append(p.errors, err)
 }
 
@@ -105,13 +99,7 @@ func (p *Parser) showErrors() string {
 		if i > 0 {
 			s += "\n\n"
 		}
-		s += fmt.Sprintf("%s, line: %d:%d\n", e.msg, e.area.Start.Line, e.area.Start.Col)
-		length := e.area.End.Col - e.area.Start.Col
-		if !e.area.IsSingleLine() {
-			length = len(lines[e.area.Start.Line]) - e.area.Start.Col
-		}
-		s += lines[e.area.Start.Line]
-		s += fmt.Sprintf("\n%s%s\n", strings.Repeat(" ", e.area.Start.Col), strings.Repeat("^", length))
+		e.ShowError(lines)
 	}
 	return s
 }
@@ -261,42 +249,46 @@ func (p *Parser) parseResumeStatement() (ast.Expr, bool) {
 
 // AssignExpr ->
 //
-//	| IdentExpr "=" AssignExpr
+//	| PipeExpr ("=" AssignExpr)*
 //	| IdentExpr "<-" (ModExpr)? AssignExpr
-//	| PipeExpr
 func (p *Parser) parseAssignExpr() (ast.Expr, bool) {
 	p.tokens.begin()
 
-	ident, ok := p.parseIdent()
-	if ok {
-		assign, ok := p.tokens.expectGet(lexer.ASSIGN)
-		if ok {
+	expr, ok := p.parsePipeExpr()
+	if !ok {
+		p.tokens.rollback()
+		return nil, false
+	}
+
+	for true {
+		if assign, ok := p.tokens.expectGet(lexer.ASSIGN); ok {
 			right, ok := p.parseAssignExpr()
 			if ok {
-				return &ast.AssignExpr{ident, right, p.tokens.commit()}, true
-			} else {
-				// Continue parsing anyway
-				p.error("Expected an expression after this assign", assign.Area)
-				p.tokens.commit()
-				return &ast.Bad{assign.Area}, true
-			}
-		}
-		capture, ok := p.tokens.expectGet(lexer.CAPTURE)
-		if ok {
-			right, ok := p.parseAssignExpr()
-			if ok {
-				modifier := capture.Lit[2:]
-				return &ast.CaptureExpr{ident, right, modifier, p.tokens.commit()}, true
+				expr = &ast.AssignExpr{expr, right, expr.GetArea().To(right.GetArea())}
 			} else {
 				// Continue parsing anyway
 				p.error("Expected an expression after this capture", assign.Area)
 				p.tokens.commit()
 				return &ast.Bad{assign.Area}, true
 			}
+		} else if capture, ok := p.tokens.expectGet(lexer.CAPTURE); ok {
+			// TODO: Capture should probably be a lower level than assign so we don't have to capture into an expression
+			right, ok := p.parseAssignExpr()
+			if ok {
+				modifier := capture.Lit[2:]
+				expr = &ast.CaptureExpr{expr, right, modifier, expr.GetArea().To(right.GetArea())}
+			} else {
+				// Continue parsing anyway
+				p.error("Expected an expression after this capture", assign.Area)
+				p.tokens.commit()
+				return &ast.Bad{assign.Area}, true
+			}
+		} else {
+			break
 		}
 	}
-	p.tokens.rollback()
-	return p.parsePipeExpr()
+	p.tokens.commit()
+	return expr, true
 }
 
 // PipeExpr ->

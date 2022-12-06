@@ -36,6 +36,7 @@ const (
 
 	// List operators
 	OP_SUBSCRIPT_BINARY
+	OP_SUBSCRIPT_ASSIGN
 	OP_CONS
 	OP_SUB_SLICE // Pop 4 values from stack, the lowest should be a list
 
@@ -69,6 +70,9 @@ const (
 	OP_CALL_METHOD
 	// takes one parameter: length of stack and pops that many elements from stack and builds a list of them
 	OP_CREATE_LIST
+
+	// takes one parameter: length of stack and pops twice that many elements from stack and builds a map of them
+	OP_CREATE_MAP
 
 	// Set closure on top of stack to handler for effect with name given by op-param
 	OP_SET_HANDLER
@@ -118,12 +122,14 @@ var op_names = []struct {
 	OP_MULT:             {"OP_MULT", 1},
 	OP_DIV:              {"OP_DIV", 1},
 	OP_SUBSCRIPT_BINARY: {"OP_SUBSCRIPT_BINARY", 1},
+	OP_SUBSCRIPT_ASSIGN: {"OP_SUBSCRIPT_ASSIGN", 1},
 	OP_CONS:             {"OP_CONS", 1},
 	OP_SUB_SLICE:        {"OP_SUB_SLICE", 1},
 	OP_ATTR:             {"OP_ATTR", 2},
 	OP_CALL:             {"OP_CALL", 2},
 	OP_CALL_METHOD:      {"OP_CALL_METHOD", 3},
 	OP_CREATE_LIST:      {"OP_CREATE_LIST", 2},
+	OP_CREATE_MAP:       {"OP_CREATE_MAP", 2},
 	OP_SET_HANDLER:      {"OP_SET_HANDLER", 4},
 	OP_POP_HANDLERS:     {"OP_POP_HANDLERS", 2},
 	OP_DO:               {"OP_DO", 2},
@@ -273,6 +279,8 @@ func (chunk *Chunk) disassembleInstruction(offset int, w io.Writer) int {
 	case OP_ADD, OP_CONS, OP_SUB_SLICE:
 		chunk.simpleInstruction(instr.String(), w)
 	case OP_SUBSCRIPT_BINARY:
+		chunk.simpleInstruction(instr.String(), w)
+	case OP_SUBSCRIPT_ASSIGN:
 		chunk.simpleInstruction(instr.String(), w)
 	case OP_POP:
 		chunk.simpleInstruction(instr.String(), w)

@@ -422,6 +422,18 @@ func (t *MapValue) Type() *Type {
 	return MapType
 }
 
+func (t *MapValue) String() string {
+	b := strings.Builder{}
+	b.WriteString("{")
+	for k, v := range t.Map {
+		b.WriteString(k)
+		b.WriteString(": ")
+		b.WriteString(v.String())
+	}
+	b.WriteString("}")
+	return b.String()
+}
+
 // Returns (nil, false) in case of out of bounds error
 func (t *MapValue) Get(key string) (Value, bool) {
 	res, ok := t.Map[key]
@@ -429,6 +441,10 @@ func (t *MapValue) Get(key string) (Value, bool) {
 		return Nil, true
 	}
 	return res, ok
+}
+
+func (t *MapValue) Set(key string, v Value) {
+	t.Map[key] = v
 }
 
 func NewMap() *MapValue {

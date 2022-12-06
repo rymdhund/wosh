@@ -127,7 +127,9 @@ func compileFunctionFromBlock(name string, params []*ast.ParamExpr, block *ast.B
 		c.getOrCreateLocalVar(param.Name.Name)
 	}
 
-	c.CompileBlockExpr(block)
+	if err := c.CompileBlockExpr(block); err != nil {
+		return nil, err
+	}
 	c.chunk.addOp1(OP_RETURN, 1)
 
 	// find slots that should be put on heap
@@ -219,9 +221,9 @@ func (c *Compiler) CompileExpr(exp ast.Expr) error {
 		return c.CompileReturnExpr(v)
 	case *ast.AttrExpr:
 		return c.CompileAttrExpr(v)
+	case *ast.MapExpr:
+		return c.CompileMapExpr(v)
 	/*
-		case *ast.MapExpr:
-			return runner.RunMapExpr(env, v)
 		case *ast.CaptureExpr:
 			switch v.Mod {
 			case "", "1":
@@ -270,8 +272,7 @@ func (c *Compiler) CompileBasicLit(lit *ast.BasicLit) error {
 		}
 		c.CompileConstant(NewInt(n), lit.StartLine())
 	case lexer.STRING:
-		s := lit.Value[1 : len(lit.Value)-1]
-		c.CompileConstant(NewString(s), lit.StartLine())
+		c.CompileStringLit(lit)
 	case lexer.BOOL:
 		if lit.Value == "true" {
 			c.chunk.addOp1(OP_TRUE, lit.StartLine())
@@ -286,6 +287,11 @@ func (c *Compiler) CompileBasicLit(lit *ast.BasicLit) error {
 		panic("Not implemented basic literal")
 	}
 	return nil
+}
+
+func (c *Compiler) CompileStringLit(lit *ast.BasicLit) {
+	s := lit.Value[1 : len(lit.Value)-1]
+	c.CompileConstant(NewString(s), lit.StartLine())
 }
 
 func (c *Compiler) CompileConstant(value Value, line int) {
@@ -377,8 +383,30 @@ func (c *Compiler) CompileListExpr(lst *ast.ListExpr) error {
 	return nil
 }
 
+func (c *Compiler) CompileMapExpr(m *ast.MapExpr) error {
+	for _, elem := range m.Elems {
+		if elem.Key.Kind != lexer.STRING {
+			panic("Unexpected map key")
+		}
+		c.CompileStringLit(elem.Key)
+		err := c.CompileExpr(elem.Val)
+		if err != nil {
+			return err
+		}
+	}
+	size := len(m.Elems)
+	if size > 255 {
+		panic("Too long map")
+	}
+	c.chunk.addOp2(OP_CREATE_MAP, Op(uint8(size)), m.StartLine())
+
+	return nil
+}
+
 func (c *Compiler) CompileSubSlice(slice *ast.SubscrExpr) error {
-	c.CompileExpr(slice.Lhs)
+	if err := c.CompileExpr(slice.Lhs); err != nil {
+		return err
+	}
 
 	for _, elem := range slice.Sub {
 		_, ok := elem.(*ast.EmptyExpr)
@@ -428,36 +456,63 @@ func (c *Compiler) CaptureFromOuterScope(name string) (uint8, bool) {
 }
 
 func (c *Compiler) CompileAssignExpr(assign *ast.AssignExpr) error {
-	c.CompileExpr(assign.Right)
+	if err := c.CompileExpr(assign.Right); err != nil {
+		return err
+	}
 
-	slot, ok := c.lookupLocalVar(assign.Ident.Name)
+	switch v := assign.Left.(type) {
+	case *ast.Ident:
+		return c.CompileAssignIdentPart(v)
+	case *ast.OpExpr:
+		if v.Op == "[]" {
+			return c.CompileAssignSubscrPart(v.Left, v.Right)
+		}
+	}
+	return codeError(assign, "Can't assign to expression.")
+}
+
+func (c *Compiler) CompileAssignIdentPart(ident *ast.Ident) error {
+	slot, ok := c.lookupLocalVar(ident.Name)
 	if ok && DEBUG_TRACE {
-		fmt.Printf("[COMPILER DEBUG] Found local var %s\n", assign.Ident.Name)
+		fmt.Printf("[COMPILER DEBUG] Found local var %s\n", ident.Name)
 	}
 	if !ok {
-		slot, ok = c.CaptureFromOuterScope(assign.Ident.Name)
+		slot, ok = c.CaptureFromOuterScope(ident.Name)
 		if ok && DEBUG_TRACE {
-			fmt.Printf("[COMPILER DEBUG] Found outer var %s\n", assign.Ident.Name)
+			fmt.Printf("[COMPILER DEBUG] Found outer var %s\n", ident.Name)
 		}
 	}
 
 	if !ok {
 		// make a new local variable
-		slot = c.getOrCreateLocalVar(assign.Ident.Name)
+		slot = c.getOrCreateLocalVar(ident.Name)
 		if DEBUG_TRACE {
-			fmt.Printf("[COMPILER DEBUG] Creating local var %s\n", assign.Ident.Name)
+			fmt.Printf("[COMPILER DEBUG] Creating local var %s\n", ident.Name)
 		}
 	}
 
 	// local variable
 	isHeap, ok := c.heapLookupTable[slot]
 	if ok && isHeap {
-		c.chunk.addOp2(OP_PUT_SLOT_HEAP, Op(slot), assign.StartLine())
+		c.chunk.addOp2(OP_PUT_SLOT_HEAP, Op(slot), ident.StartLine())
 	} else {
-		c.chunk.addOp2(OP_PUT_SLOT, Op(slot), assign.StartLine())
+		c.chunk.addOp2(OP_PUT_SLOT, Op(slot), ident.StartLine())
 	}
 
-	c.chunk.addOp1(OP_NIL, assign.StartLine()) // result is nil
+	c.chunk.addOp1(OP_NIL, ident.StartLine()) // result is nil
+	return nil
+}
+
+func (c *Compiler) CompileAssignSubscrPart(lhs, key ast.Expr) error {
+	if err := c.CompileExpr(lhs); err != nil {
+		return err
+	}
+	if err := c.CompileExpr(key); err != nil {
+		return err
+	}
+
+	c.chunk.addOp1(OP_SUBSCRIPT_ASSIGN, lhs.GetArea().StartLine())
+	c.chunk.addOp1(OP_NIL, lhs.GetArea().StartLine()) // result is nil
 	return nil
 }
 
@@ -625,7 +680,9 @@ func (c *Compiler) CompileTryExpr(try *ast.TryExpr) error {
 			}
 		}
 
-		c.CompileBlockExpr(handler.Then)
+		if err := c.CompileBlockExpr(handler.Then); err != nil {
+			return err
+		}
 
 		// Maybe clean up the continuation here?
 
@@ -643,7 +700,9 @@ func (c *Compiler) CompileTryExpr(try *ast.TryExpr) error {
 		c.chunk.addOp4(OP_SET_HANDLER, Op(nameIdx), Op(pos1), Op(pos2), try.StartLine())
 	}
 
-	c.CompileExpr(try.TryBlock)
+	if err := c.CompileExpr(try.TryBlock); err != nil {
+		return err
+	}
 
 	c.chunk.addOp2(OP_POP_HANDLERS, Op(len(try.HandleBlock)), try.StartLine())
 
@@ -765,7 +824,9 @@ func (c *Compiler) CompileResumeExpr(resume *ast.ResumeExpr) error {
 			return err
 		}
 	}
-	c.CompileIdent(resume.Ident)
+	if err := c.CompileIdent(resume.Ident); err != nil {
+		return err
+	}
 	c.chunk.addOp1(OP_RESUME, resume.StartLine())
 
 	return nil
@@ -827,4 +888,8 @@ func (c *Compiler) CompileAttrExpr(attr *ast.AttrExpr) error {
 
 	return nil
 
+}
+
+func codeError(e ast.Expr, msg string) error {
+	return &ast.CodeError{msg, e.GetArea()}
 }

@@ -84,25 +84,7 @@ func TestCompile(t *testing.T) {
 }
 
 func TestAdd(t *testing.T) {
-	prog := "x = 1 + 1 \n x"
-	main, err := parseMain(prog)
-	if err != nil {
-		t.Fatal(err)
-	}
-	function, err := Compile(main)
-	if err != nil {
-		t.Fatal(err)
-	}
-	function.DebugPrint()
-
-	vm := NewVm()
-	v, err := vm.Interpret(function)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !testEqual(NewInt(2), v) {
-		t.Error("Expected 2")
-	}
+	assertRes(t, "x = 1 + 1\nx", NewInt(2))
 }
 
 func TestLiterals(t *testing.T) {
@@ -564,6 +546,21 @@ func TestList(t *testing.T) {
 	assertInt(t, "[3, 4][:][0]", 3)
 	assertInt(t, "[3, 4][:][1]", 4)
 	assertInt(t, "len([0] + [1])", 2)
+}
+
+func TestMap(t *testing.T) {
+	assertInt(t, "{'a': 1, 'b': 2}['a']", 1)
+	assertTrue(t, "{'abc': true}['abc']")
+	assertTrue(t, "{'abc': true}['abc']")
+
+	run(t, `
+	m = {"a": 1, "b": 2}
+
+	assert(m["a"] == 1, "error 1")
+
+	m["a"] = 2
+	assert(m["a"] == 2, "error 2")
+	`)
 }
 
 func TestMethodDef(t *testing.T) {

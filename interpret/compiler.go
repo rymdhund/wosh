@@ -462,13 +462,75 @@ func (c *Compiler) CompileAssignExpr(assign *ast.AssignExpr) error {
 
 	switch v := assign.Left.(type) {
 	case *ast.Ident:
-		return c.CompileAssignIdentPart(v)
+		err := c.CompileAssignIdentPart(v)
+		c.chunk.addOp1(OP_NIL, v.StartLine()) // result is nil
+		return err
 	case *ast.OpExpr:
 		if v.Op == "[]" {
-			return c.CompileAssignSubscrPart(v.Left, v.Right)
+			err := c.CompileAssignSubscrPart(v.Left, v.Right)
+			c.chunk.addOp1(OP_NIL, v.Left.GetArea().StartLine()) // result is nil
+			return err
 		}
+	default:
+		err := c.compileDestructureAssign(assign.Left)
+		c.chunk.addOp1(OP_NIL, assign.Left.GetArea().StartLine()) // result is nil
+		return err
+
 	}
 	return codeError(assign, "Can't assign to expression.")
+}
+
+// Check that the top of stack has type
+func (c *Compiler) macroCheckType(t *Type, line int) {
+	c.chunk.addOp1(OP_TYPE, line)
+	c.macroCheckEquals(NewTypeValue(ListType), TYPE_ERROR, line)
+}
+
+// Check that the top of stack equals value
+func (c *Compiler) macroCheckEquals(v Value, errNum int, line int) {
+	c.CompileConstant(v, line)
+	c.chunk.addOp1(OP_EQ, line)
+	c.chunk.addOp2(OP_CHECK, Op(errNum), line)
+}
+
+func (c *Compiler) macroPutGlobalFunction(name string, line int) {
+	nameIdx := c.getOrSetName(name)
+	c.chunk.addOp2(OP_LOAD_GLOBAL_NAME, Op(nameIdx), line)
+}
+
+func (c *Compiler) macroCall(arity int, line int) {
+	c.chunk.addOp2(OP_CALL, Op(arity), line)
+}
+
+func (c *Compiler) compileDestructureAssign(expr ast.Expr) error {
+	switch v := expr.(type) {
+	case *ast.Ident:
+		return c.CompileAssignIdentPart(v)
+	case *ast.ListExpr:
+		// Do runtime checks
+		c.macroCheckType(ListType, expr.GetArea().StartLine())
+
+		// Check correct length
+		c.chunk.addOp1(OP_COPY, expr.GetArea().StartLine())
+		c.macroPutGlobalFunction("len", expr.GetArea().StartLine())
+		c.chunk.addOp1(OP_SWAP, expr.GetArea().StartLine())
+		c.macroCall(1, expr.GetArea().StartLine())
+		c.macroCheckEquals(NewInt(len(v.Elems)), DESTRUCTURE_ERROR, expr.GetArea().StartLine())
+
+		for i, elem := range v.Elems {
+			if i < len(v.Elems)-1 {
+				// Copy so we keep the value for the next elem
+				c.chunk.addOp1(OP_COPY, expr.GetArea().StartLine())
+			}
+			c.CompileConstant(NewInt(i), expr.GetArea().StartLine())
+			c.chunk.addOp1(OP_SUBSCRIPT_BINARY, expr.GetArea().StartLine())
+			if err := c.compileDestructureAssign(elem); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	return codeError(expr, "Can't assign to expression")
 }
 
 func (c *Compiler) CompileAssignIdentPart(ident *ast.Ident) error {
@@ -498,8 +560,6 @@ func (c *Compiler) CompileAssignIdentPart(ident *ast.Ident) error {
 	} else {
 		c.chunk.addOp2(OP_PUT_SLOT, Op(slot), ident.StartLine())
 	}
-
-	c.chunk.addOp1(OP_NIL, ident.StartLine()) // result is nil
 	return nil
 }
 
@@ -512,7 +572,6 @@ func (c *Compiler) CompileAssignSubscrPart(lhs, key ast.Expr) error {
 	}
 
 	c.chunk.addOp1(OP_SUBSCRIPT_ASSIGN, lhs.GetArea().StartLine())
-	c.chunk.addOp1(OP_NIL, lhs.GetArea().StartLine()) // result is nil
 	return nil
 }
 

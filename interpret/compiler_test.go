@@ -67,6 +67,24 @@ func assertRes(t *testing.T, prog string, res Value) {
 	}
 }
 
+func assertRuntimeError(t *testing.T, prog string) {
+	t.Helper()
+	main, err := parseMain(prog)
+	if err != nil {
+		t.Fatalf("Error parsing `%s`: %s", prog, err)
+	}
+	function, err := Compile(main)
+	if err != nil {
+		t.Fatalf("Error compiling `%s`: %s", prog, err)
+	}
+
+	vm := NewVm()
+	_, err = vm.Interpret(function)
+	if err == nil {
+		t.Errorf("Expected error when running `%s`", prog)
+	}
+}
+
 func TestCompile(t *testing.T) {
 	prog := "x = 1"
 	main, err := parseMain(prog)
@@ -621,6 +639,15 @@ func TestString(t *testing.T) {
 	assertRes(t, "'abc'[1:]", NewString("bc"))
 	assertRes(t, "'åäö'[1:]", NewString("äö"))
 	assertRes(t, "'åäö'[1]", NewString("ä"))
+}
+
+func TestDestructure(t *testing.T) {
+	assertRes(t, "[x, y] = [1, 2]\nx", NewInt(1))
+	assertRes(t, "[x, y] = [1, 2]\ny", NewInt(2))
+	assertRes(t, "[[x], y] = [[1], 2]\nx", NewInt(1))
+	assertRes(t, "[[a], b, [c, [d]]] = [[1], 2, [3, [4]]]\nd", NewInt(4))
+	assertRuntimeError(t, "[x, y] = [1, 2, 3]")
+	assertRuntimeError(t, "[x, y] = 'abc'")
 }
 
 func TestSmall(t *testing.T) {

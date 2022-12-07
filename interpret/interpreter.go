@@ -209,6 +209,7 @@ func (vm *VM) run() (Value, error) {
 			fmt.Print("\n")
 		}
 
+		var err error
 		switch instr {
 		case OP_RETURN:
 			retVal := frame.popStack()
@@ -259,93 +260,61 @@ func (vm *VM) run() (Value, error) {
 				vm.opCallMethod(1, "eq")
 			}
 		case OP_NEG:
-			err := frame.opNeg()
-			if err != nil {
-				return nil, err
-			}
+			err = frame.opNeg()
 		case OP_ADD:
-			ok, err := frame.opAdd()
-			if err != nil {
-				return nil, err
-			}
+			var ok bool
+			ok, err = frame.opAdd()
 			if !ok {
 				vm.opCallMethod(1, "add")
 			}
 		case OP_SUB:
-			ok, err := frame.opSub()
-			if err != nil {
-				return nil, err
-			}
+			var ok bool
+			ok, err = frame.opSub()
 			if !ok {
 				vm.opCallMethod(1, "sub")
 			}
 		case OP_MULT:
-			ok, err := frame.opMult()
-			if err != nil {
-				return nil, err
-			}
+			var ok bool
+			ok, err = frame.opMult()
 			if !ok {
 				vm.opCallMethod(1, "mult")
 			}
 		case OP_DIV:
-			ok, err := frame.opDiv()
-			if err != nil {
-				return nil, err
-			}
+			var ok bool
+			ok, err = frame.opDiv()
 			if !ok {
 				vm.opCallMethod(1, "div")
 			}
 		case OP_CONS:
-			ok, err := frame.opCons()
-			if err != nil {
-				return nil, err
-			}
+			var ok bool
+			ok, err = frame.opCons()
 			if !ok {
 				vm.opCallMethod(1, "cons")
 			}
 		case OP_SUB_SLICE:
-			err := frame.opSubSlice()
-			if err != nil {
-				return nil, err
-			}
+			err = frame.opSubSlice()
 		case OP_SUBSCRIPT_ASSIGN:
-			err := frame.opSubAssign()
-			if err != nil {
-				return nil, err
-			}
+			err = frame.opSubAssign()
 		case OP_LESS:
-			err := frame.opLess()
-			if err != nil {
-				return nil, err
-			}
+			err = frame.opLess()
 		case OP_LESS_EQ:
 			panic("Not implemented")
 		case OP_NOT:
-			err := frame.opNot()
-			if err != nil {
-				return nil, err
-			}
+			err = frame.opNot()
 		case OP_AND:
-			err := frame.opAnd()
-			if err != nil {
-				return nil, err
-			}
+			err = frame.opAnd()
 		case OP_OR:
-			err := frame.opOr()
-			if err != nil {
-				return nil, err
-			}
+			err = frame.opOr()
 		case OP_SUBSCRIPT_BINARY:
-			err := frame.opSubscr()
-			if err != nil {
-				return nil, err
-			}
+			err = frame.opSubscr()
 		case OP_CREATE_LIST:
 			size := int(frame.readCode())
 			frame.opCreateList(size)
 		case OP_CREATE_MAP:
 			size := int(frame.readCode())
 			frame.opCreateMap(size)
+		case OP_COPY:
+			frame.pushStack(frame.peekStack(0))
 		case OP_POP:
 			frame.popStack()
 		case OP_SWAP:
@@ -425,8 +394,16 @@ func (vm *VM) run() (Value, error) {
 			vm.opDo(arity)
 		case OP_RESUME:
 			vm.opResume()
+		case OP_TYPE:
+			frame.pushStack(NewTypeValue(frame.peekStack(0).Type()))
+		case OP_CHECK:
+			errNum := int(frame.readCode())
+			err = frame.opCheck(errNum)
 		default:
-			return nil, fmt.Errorf("Unexpected opcode %d", instr)
+			return nil, fmt.Errorf("Unexpected opcode %s(%d) ", instr.String(), instr)
+		}
+		if err != nil {
+			return nil, err
 		}
 	}
 	// Unreachable
@@ -866,4 +843,20 @@ func (vm *VM) opResume() {
 	default:
 		panic("Expected continuation on top of stack")
 	}
+}
+
+func (frame *CallFrame) opCheck(errNum int) error {
+	b, ok := frame.popStack().(*BoolValue)
+	if !ok {
+		return fmt.Errorf("Panic: expected bool in check operation")
+	}
+	if !b.Val {
+		return frame.runtimeError(runtimeErrorText(errNum))
+	}
+	return nil
+}
+
+func (frame *CallFrame) runtimeError(msg string) error {
+	line := frame.closure.Function.Chunk.LineNr[frame.ip]
+	return fmt.Errorf("Runtime Error on line %d: %s", line, msg)
 }

@@ -40,6 +40,7 @@ const (
 	OP_CONS
 	OP_SUB_SLICE // Pop 4 values from stack, the lowest should be a list
 
+	OP_COPY // Duplicate top of stack
 	OP_POP
 	OP_SWAP // swap top two elements on stack
 
@@ -82,6 +83,12 @@ const (
 
 	// like CALL for effects
 	OP_DO
+
+	// Get the type of current top of stack. Doesn't pop top of stack
+	OP_TYPE
+
+	// Verify that top of stack is true and otherwise exit with an error
+	OP_CHECK
 )
 
 var op_names = []struct {
@@ -103,6 +110,7 @@ var op_names = []struct {
 	OP_NOT:              {"OP_NOT", 1},
 	OP_AND:              {"OP_AND", 1},
 	OP_OR:               {"OP_OR", 1},
+	OP_COPY:             {"OP_COPY", 1},
 	OP_POP:              {"OP_POP", 1},
 	OP_SWAP:             {"OP_SWAP", 1},
 	OP_JUMP:             {"OP_JUMP", 3},
@@ -133,6 +141,8 @@ var op_names = []struct {
 	OP_SET_HANDLER:      {"OP_SET_HANDLER", 4},
 	OP_POP_HANDLERS:     {"OP_POP_HANDLERS", 2},
 	OP_DO:               {"OP_DO", 2},
+	OP_TYPE:             {"OP_TYPE", 1},
+	OP_CHECK:            {"OP_CHECK", 2},
 }
 
 func (o Op) String() string {
@@ -282,6 +292,8 @@ func (chunk *Chunk) disassembleInstruction(offset int, w io.Writer) int {
 		chunk.simpleInstruction(instr.String(), w)
 	case OP_SUBSCRIPT_ASSIGN:
 		chunk.simpleInstruction(instr.String(), w)
+	case OP_COPY:
+		chunk.simpleInstruction(instr.String(), w)
 	case OP_POP:
 		chunk.simpleInstruction(instr.String(), w)
 	case OP_SWAP:
@@ -312,6 +324,10 @@ func (chunk *Chunk) disassembleInstruction(offset int, w io.Writer) int {
 		chunk.setHandler(instr.String(), offset, w)
 	case OP_POP_HANDLERS | OP_DO:
 		chunk.oneParamInstruction(instr.String(), offset, w)
+	case OP_TYPE:
+		chunk.simpleInstruction(instr.String(), w)
+	case OP_CHECK:
+		chunk.simpleInstruction(instr.String(), w)
 	default:
 		fmt.Fprintf(w, "Unknown opcode %s\n", instr.String())
 	}

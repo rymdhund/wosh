@@ -1,6 +1,8 @@
 package parser
 
-import "github.com/rymdhund/wosh/lexer"
+import (
+	"github.com/rymdhund/wosh/lexer"
+)
 
 type TokenReader struct {
 	items                []lexer.TokenItem

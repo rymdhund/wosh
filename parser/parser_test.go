@@ -326,16 +326,13 @@ func TestParseMisc(t *testing.T) {
 	tests := []string{
 		"a['a'] = 1",
 		"a[1] = 1",
+		"(a) => a + 1",
 	}
 	for _, prog := range tests {
 		p := NewParser(prog)
-		exprs, _, err := p.Parse()
+		_, _, err := p.Parse()
 		if err != nil {
 			t.Error(err)
-		}
-		_, ok := exprs.Children[0].(*ast.AssignExpr)
-		if !ok {
-			t.Errorf("expected AssignExpr, got %+v", exprs.Children[0])
 		}
 	}
 }

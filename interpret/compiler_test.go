@@ -27,17 +27,17 @@ func run(t *testing.T, prog string) Value {
 	t.Helper()
 	main, err := parseMain(prog)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Parse error:%s", err)
 	}
 	function, err := Compile(main)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Compile error:%s", err)
 	}
 
 	vm := NewVm()
 	v, err := vm.Interpret(function)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Run error:%s", err)
 	}
 	return v
 }
@@ -224,6 +224,17 @@ func TestCall(t *testing.T) {
 	if !testEqual(res, NewInt(4)) {
 		t.Errorf("expected 4, got %s", res)
 	}
+}
+
+func TestArrow(t *testing.T) {
+	run(t, `
+	f = (a) => a + 1
+	assert(f(1) == 2, "arrow1")
+
+	g = (f) => f(1) + 1
+	res = g((x) => x + 2)
+	assert(res == 4, "arrow2")
+	`)
 }
 
 func TestClosure(t *testing.T) {
@@ -533,6 +544,10 @@ func TestBool(t *testing.T) {
 	assertFalse(t, "true && false")
 	assertFalse(t, "false && true")
 	assertFalse(t, "false && false")
+
+	// test lazy
+	assertFalse(t, "false && assert(false, '')")
+	assertTrue(t, "true || assert(false, '')")
 }
 
 func TestList(t *testing.T) {

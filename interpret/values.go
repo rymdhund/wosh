@@ -425,7 +425,13 @@ func (t *MapValue) Type() *Type {
 func (t *MapValue) String() string {
 	b := strings.Builder{}
 	b.WriteString("{")
+	first := true
 	for k, v := range t.Map {
+		if first {
+			first = false
+		} else {
+			b.WriteString(", ")
+		}
 		b.WriteString(k)
 		b.WriteString(": ")
 		b.WriteString(v.String())

@@ -100,7 +100,11 @@ func compileFunction(function *ast.FuncDefExpr, prev *Compiler) (*FunctionValue,
 	if function.ClassParam != nil {
 		params = append([]*ast.ParamExpr{function.ClassParam}, params...)
 	}
-	return compileFunctionFromBlock(function.Ident.Name, params, function.Body, prev)
+	name := "__anon__"
+	if function.Ident != nil {
+		name = function.Ident.Name
+	}
+	return compileFunctionFromBlock(name, params, function.Body, prev)
 }
 
 func compileFunctionFromBlock(name string, params []*ast.ParamExpr, block *ast.BlockExpr, prev *Compiler) (*FunctionValue, error) {
@@ -676,9 +680,14 @@ func (c *Compiler) CompileFuncDefExpr(fn *ast.FuncDefExpr) error {
 	}
 
 	constId := c.chunk.addConst(fnValue)
-	nameId := c.getOrSetName(fn.Ident.Name)
 	c.chunk.addOp2(OP_MAKE_CLOSURE, constId, fn.StartLine())
 
+	if fn.Ident == nil {
+		// anonymous function
+		return nil
+	}
+
+	nameId := c.getOrSetName(fn.Ident.Name)
 	if fn.ClassParam == nil {
 		c.chunk.addOp2(OP_PUT_GLOBAL_NAME, Op(nameId), fn.StartLine())
 	} else {

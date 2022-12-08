@@ -21,8 +21,15 @@ import (
 //   | AssignExpr
 //
 // AssignExpr ->
+//   | ArrowFnExpr
 //   | IdentExpr "<-" (ModExpr)? AssignExpr
 //   | PipeExpr ("=" AssignExpr)*
+//
+// ArrowFnExpr ->
+//   | ParamListExpr "=>" "{" Block "}"
+//   | ParamListExpr "=>" Expr
+//   | ParamExpr "=>" "{" Block "}"
+//   | ParamExpr "=>" Expr
 //
 // PipeExpr ->
 //   | RedirectExpr ('|[oe]' PipeExpr)*
@@ -88,6 +95,10 @@ func (p *Parser) error(msg string, pos lexer.Area) {
 	p.errors = append(p.errors, err)
 }
 
+func (p *Parser) codeError(err *ast.CodeError) {
+	p.errors = append(p.errors, *err)
+}
+
 func (p *Parser) showErrors() string {
 	if len(p.errors) == 0 {
 		return ""
@@ -99,7 +110,7 @@ func (p *Parser) showErrors() string {
 		if i > 0 {
 			s += "\n\n"
 		}
-		e.ShowError(lines)
+		s += e.ShowError(lines)
 	}
 	return s
 }
@@ -128,7 +139,7 @@ func (p *Parser) Parse() (*ast.BlockExpr, []string, error) {
 		p.error(fmt.Sprintf("Unexpected token '%s'", ti.Lit), ti.Area)
 	}
 	if len(p.errors) != 0 {
-		return expr, []string{}, fmt.Errorf("Errors:\n%s", p.showErrors())
+		return expr, []string{}, fmt.Errorf("Parsing errors:\n%s", p.showErrors())
 	}
 	return expr, imports, nil
 }
@@ -249,11 +260,16 @@ func (p *Parser) parseResumeStatement() (ast.Expr, bool) {
 
 // AssignExpr ->
 //
+//	| ArrowFnExpr
 //	| PipeExpr ("=" AssignExpr)*
 //	| IdentExpr "<-" (ModExpr)? AssignExpr
 func (p *Parser) parseAssignExpr() (ast.Expr, bool) {
-	p.tokens.begin()
+	arrow, ok := p.parseArrowFnExpr()
+	if ok {
+		return arrow, ok
+	}
 
+	p.tokens.begin()
 	expr, ok := p.parsePipeExpr()
 	if !ok {
 		p.tokens.rollback()
@@ -289,6 +305,46 @@ func (p *Parser) parseAssignExpr() (ast.Expr, bool) {
 	}
 	p.tokens.commit()
 	return expr, true
+}
+
+// ArrowFnExpr ->
+//
+//	| ParamListExpr "=>" "{" Block "}"
+//	| ParamListExpr "=>" Expr
+//	| ParamExpr "=>" "{" Block "}"
+//	| ParamExpr "=>" Expr
+func (p *Parser) parseArrowFnExpr() (ast.Expr, bool) {
+	p.tokens.begin()
+
+	paramList, err := p.parseParamList()
+	if err != nil {
+		// Ignore error
+		p.tokens.rollback()
+		return nil, false
+	}
+
+	ok := p.tokens.expect(lexer.ARROW)
+	if !ok {
+		// Ignore error
+		p.tokens.rollback()
+		return nil, false
+	}
+
+	body, err := p.parseBracedBlockOrSingleExpr()
+	if err != nil {
+		p.codeError(err)
+		p.tokens.rollback()
+		return nil, false
+	}
+
+	a := p.tokens.commit()
+	return &ast.FuncDefExpr{
+		Ident:      nil,
+		ClassParam: nil,
+		Params:     paramList,
+		Body:       body,
+		Area:       a,
+	}, true
 }
 
 // PipeExpr ->
@@ -978,32 +1034,11 @@ func (p *Parser) parseFnDefExpr() (ast.Expr, bool) {
 		}
 	}
 
-	if !p.tokens.expect(lexer.LPAREN) {
-		// TODO
-		panic("ParseFnDef: Not implemented")
-	}
-	p.tokens.beginEolSignificance(false)
-
-	params := []*ast.ParamExpr{}
-	for true {
-		param, ok := p.parseParam(false)
-		if !ok {
-			break
-		}
-		params = append(params, param)
-		if !p.tokens.expect(lexer.COMMA) {
-			break
-		}
-	}
-
-	if !p.tokens.expect(lexer.RPAREN) {
-		// TODO
-		p.error(fmt.Sprintf("Expected end of function, found %s", p.tokens.peek().Lit), p.tokens.peek().Area)
-		p.tokens.popEolSignificance()
-		p.tokens.rollback()
+	paramList, err := p.parseParamList()
+	if err != nil {
+		p.codeError(err)
 		return nil, false
 	}
-	p.tokens.popEolSignificance()
 
 	if !p.tokens.expect(lexer.LBRACE) {
 		// TODO
@@ -1019,7 +1054,37 @@ func (p *Parser) parseFnDefExpr() (ast.Expr, bool) {
 	}
 
 	a := p.tokens.commit()
-	return &ast.FuncDefExpr{ident, classParam, params, body, a}, true
+	return &ast.FuncDefExpr{ident, classParam, paramList, body, a}, true
+}
+
+func (p *Parser) parseParamList() ([]*ast.ParamExpr, *ast.CodeError) {
+	p.tokens.begin()
+	if !p.tokens.expect(lexer.LPAREN) {
+		p.tokens.rollback()
+		return nil, &ast.CodeError{"Expected start of parameter list", p.tokens.peek().Area}
+	}
+	p.tokens.beginEolSignificance(false)
+
+	params := []*ast.ParamExpr{}
+	for true {
+		param, ok := p.parseParam(false)
+		if !ok {
+			break
+		}
+		params = append(params, param)
+		if !p.tokens.expect(lexer.COMMA) {
+			break
+		}
+	}
+
+	p.tokens.popEolSignificance()
+	if !p.tokens.expect(lexer.RPAREN) {
+		err := &ast.CodeError{fmt.Sprintf("Expected end of parameter list, found %s", p.tokens.peek().Lit), p.tokens.peek().Area}
+		p.tokens.rollback()
+		return nil, err
+	}
+	p.tokens.commit()
+	return params, nil
 }
 
 // parse "foo: Bar"
@@ -1266,4 +1331,49 @@ func (p *Parser) parseBracedBlock(name string) (ast.Expr, bool) {
 	p.tokens.popEolSignificance()
 	p.tokens.commit()
 	return block, true
+}
+
+func (p *Parser) parseBracedBlockOrSingleExpr() (*ast.BlockExpr, *ast.CodeError) {
+	p.tokens.begin()
+	ok := p.tokens.expect(lexer.LBRACE)
+	if !ok {
+		expr, ok := p.parseExpr()
+		if !ok {
+			err := &ast.CodeError{
+				"Expected \"{\" or expression",
+				p.tokens.peek().Area,
+			}
+			p.tokens.rollback()
+			return nil, err
+		}
+
+		p.tokens.commit()
+		return &ast.BlockExpr{
+			Children: []ast.Expr{expr},
+			Area:     expr.GetArea(),
+		}, nil
+	}
+
+	block, ok := p.parseBlockExpr()
+	if !ok {
+		err := &ast.CodeError{
+			"Expected inner expression in block",
+			p.tokens.peek().Area,
+		}
+		p.tokens.rollback()
+		return nil, err
+	}
+
+	_, ok = p.tokens.expectGet(lexer.RBRACE)
+	if !ok {
+		err := &ast.CodeError{
+			"Expected expression or \"}\"",
+			p.tokens.peek().Area,
+		}
+		p.tokens.rollback()
+		return nil, err
+	}
+
+	p.tokens.commit()
+	return block, nil
 }

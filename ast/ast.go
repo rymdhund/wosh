@@ -255,7 +255,7 @@ func (v *ParamExpr) String() string {
 }
 
 type FuncDefExpr struct {
-	Ident      *Ident
+	Ident      *Ident     // might be nil
 	ClassParam *ParamExpr // might be nil
 	Params     []*ParamExpr
 	Body       *BlockExpr

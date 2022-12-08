@@ -40,6 +40,7 @@ const (
 	DO
 	RESUME
 	RETURN
+	ARROW
 	SINGLE_ARROW
 	AT
 	IMPORT
@@ -79,6 +80,7 @@ var tokens = []string{
 	DO:           "DO",
 	RESUME:       "RESUME",
 	RETURN:       "RETURN",
+	ARROW:        "=>",
 	SINGLE_ARROW: "->",
 	AT:           "@",
 	IMPORT:       "IMPORT",
@@ -222,9 +224,11 @@ func (l *Lexer) LexTokenItem() TokenItem {
 			return TokenItem{PIPE_OP, r2, l.step(2)}
 		case "<-":
 			return l.lexCapture()
+		case "=>":
+			l.popn(2)
+			return TokenItem{ARROW, r2, l.step(2)}
 		case "->":
 			l.popn(2)
-
 			return TokenItem{SINGLE_ARROW, r2, l.step(2)}
 		default:
 		}

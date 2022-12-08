@@ -304,6 +304,32 @@ func (c *Compiler) CompileOpExpr(op *ast.OpExpr) error {
 	if err != nil {
 		return err
 	}
+
+	// lazy
+	switch op.Op {
+	case "&&":
+		c.chunk.addOp1(OP_COPY, op.StartLine())
+		firstFalse := c.addJumpToPlaceholder(OP_JUMP_IF_FALSE, op.StartLine())
+		c.chunk.addOp1(OP_POP, op.StartLine())
+		err = c.CompileExpr(op.Right)
+		if err != nil {
+			return err
+		}
+		c.setPlaceholder(firstFalse, c.chunk.currentPos())
+		return nil
+	case "||":
+		c.chunk.addOp1(OP_COPY, op.StartLine())
+		c.chunk.addOp1(OP_NOT, op.StartLine())
+		firstTrue := c.addJumpToPlaceholder(OP_JUMP_IF_FALSE, op.StartLine())
+		c.chunk.addOp1(OP_POP, op.StartLine())
+		err = c.CompileExpr(op.Right)
+		if err != nil {
+			return err
+		}
+		c.setPlaceholder(firstTrue, c.chunk.currentPos())
+		return nil
+	}
+
 	err = c.CompileExpr(op.Right)
 	if err != nil {
 		return err
@@ -336,10 +362,6 @@ func (c *Compiler) CompileOpExpr(op *ast.OpExpr) error {
 	case ">=":
 		c.chunk.addOp1(OP_LESS, op.StartLine())
 		c.chunk.addOp1(OP_NOT, op.StartLine())
-	case "&&":
-		c.chunk.addOp1(OP_AND, op.StartLine())
-	case "||":
-		c.chunk.addOp1(OP_OR, op.StartLine())
 	case "[]":
 		c.chunk.addOp1(OP_SUBSCRIPT_BINARY, op.StartLine())
 	case "::":

@@ -95,6 +95,23 @@ func builtinAssert(value Value, message Value) Value {
 	return Nil
 }
 
+func builtinItems(v Value) Value {
+	switch x := v.(type) {
+	case *MapValue:
+		pairs := ListNil()
+		for k, v := range x.Map {
+			pairs = ListCons(ListCons(NewString(k), ListCons(v, ListNil())), pairs)
+		}
+		return pairs
+	default:
+		panic(fmt.Sprintf("%v does not support items()", v))
+	}
+}
+
+func builtinType(v Value) Value {
+	return NewTypeValue(v.Type())
+}
+
 func NewVm() *VM {
 	globals := map[string]Value{}
 	globals["readlines"] = NewBuiltin("readlines", 1, builtinReadlines)
@@ -103,6 +120,8 @@ func NewVm() *VM {
 	globals["len"] = NewBuiltin("len", 1, builtinLen)
 	globals["ord"] = NewBuiltin("ord", 1, builtinOrd)
 	globals["assert"] = NewBuiltin("assert", 2, builtinAssert)
+	globals["items"] = NewBuiltin("items", 1, builtinItems)
+	globals["type"] = NewBuiltin("type", 1, builtinType)
 
 	globals["Bool"] = NewTypeValue(BoolType)
 	globals["Int"] = NewTypeValue(IntType)
@@ -335,7 +354,7 @@ func (vm *VM) run() (Value, error) {
 			name := frame.readName()
 			val, ok := vm.globals[name]
 			if !ok {
-				return nil, fmt.Errorf("Not defined: %s", name)
+				return nil, frame.runtimeError(fmt.Sprintf("Not defined: %s", name))
 			}
 			frame.pushStack(val)
 		case OP_LOOP:
@@ -680,7 +699,7 @@ func (frame *CallFrame) opSubAssign() error {
 		v.Set(k.Val, value)
 		return nil
 	}
-	return fmt.Errorf("Can't subscript assign to %v", obj)
+	return frame.runtimeError(fmt.Sprintf("Can't subscript assign to %v", obj))
 }
 
 func (frame *CallFrame) opCreateList(size int) {

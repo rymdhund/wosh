@@ -292,7 +292,7 @@ func (l *Lexer) LexTokenItem() TokenItem {
 			return l.lexSpace()
 		} else if unicode.IsDigit(r) {
 			return l.lexNumber()
-		} else if unicode.IsLetter(r) {
+		} else if unicode.IsLetter(r) || r == '_' {
 			return l.lexIdentOrKw()
 		} else {
 			l.pop()

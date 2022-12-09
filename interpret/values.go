@@ -15,39 +15,32 @@ const (
 type FunctionMap map[string]*FunctionValue
 
 type Type struct {
-	Name    string
-	Methods FunctionMap
+	Name       string
+	Methods    FunctionMap
+	Attributes []string
 }
 
-var NilType = &Type{"Nil", FunctionMap{}}
-var BoolType = &Type{"Bool", FunctionMap{}}
-var IntType = &Type{"Int", FunctionMap{}}
-var StringType = &Type{"Str", FunctionMap{}}
-var ListType = &Type{"List", FunctionMap{}}
-var MapType = &Type{"Map", FunctionMap{}}
-var FunctionType = &Type{"Function", FunctionMap{}}
-var ClosureType = &Type{"Closure", FunctionMap{}}
-var ExceptionType = &Type{"Exception", FunctionMap{}}
-var BoxType = &Type{"Box", FunctionMap{}}
-var ContinuationType = &Type{"Continuation", FunctionMap{}}
-var BuiltinType = &Type{"Builtin", FunctionMap{}}
-var TypeType = &Type{"Type", FunctionMap{}}
-
-var types = map[string]*Type{
-	"Nil":  NilType,
-	"Bool": BoolType,
-	"Int":  IntType,
-	"Str":  StringType,
-	"List": ListType,
-	"Map":  MapType,
-	// We don't expose these yet:
-	// "Function"
-	// "Closure"
-	// "Exception"
-	// "Box"
-	// "Continuation"
-	// "Builtin"
+func (t *Type) MethodNames() []string {
+	names := make([]string, 0, len(t.Methods))
+	for _, method := range t.Methods {
+		names = append(names, method.Name)
+	}
+	return names
 }
+
+var NilType = &Type{"Nil", FunctionMap{}, nil}
+var BoolType = &Type{"Bool", FunctionMap{}, nil}
+var IntType = &Type{"Int", FunctionMap{}, nil}
+var StringType = &Type{"Str", FunctionMap{}, nil}
+var ListType = &Type{"List", FunctionMap{}, nil}
+var MapType = &Type{"Map", FunctionMap{}, nil}
+var FunctionType = &Type{"Function", FunctionMap{}, nil}
+var ClosureType = &Type{"Closure", FunctionMap{}, nil}
+var ExceptionType = &Type{"Exception", FunctionMap{}, nil}
+var BoxType = &Type{"Box", FunctionMap{}, nil}
+var ContinuationType = &Type{"Continuation", FunctionMap{}, nil}
+var BuiltinType = &Type{"Builtin", FunctionMap{}, nil}
+var TypeType = &Type{"Type", FunctionMap{}, nil}
 
 type Value interface {
 	Type() *Type
@@ -509,4 +502,34 @@ func (t *BuiltinValue) String() string {
 
 func NewBuiltin(name string, arity int, function interface{}) *BuiltinValue {
 	return &BuiltinValue{name, arity, function}
+}
+
+type CustomValue struct {
+	Attributes []Value
+	Typ        *Type
+}
+
+func (v *CustomValue) Type() *Type {
+	return v.Typ
+}
+
+func (v *CustomValue) String() string {
+	typ := v.Type()
+	b := strings.Builder{}
+	b.WriteString(typ.Name)
+	b.WriteRune('(')
+	for i, a := range v.Attributes {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString(typ.Attributes[i])
+		b.WriteString(" = ")
+		b.WriteString(a.String())
+	}
+	b.WriteRune(')')
+	return b.String()
+}
+
+func NewCustom(typ *Type, attrs []Value) *CustomValue {
+	return &CustomValue{attrs, typ}
 }

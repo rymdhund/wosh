@@ -203,6 +203,8 @@ func (c *Compiler) CompileExpr(exp ast.Expr) error {
 		return c.CompileIdent(v)
 	case *ast.FuncDefExpr:
 		return c.CompileFuncDefExpr(v)
+	case *ast.TypeDefExpr:
+		return c.CompileTypeDefExpr(v)
 	case *ast.TryExpr:
 		return c.CompileTryExpr(v)
 	case *ast.DoExpr:
@@ -699,6 +701,21 @@ func (c *Compiler) CompileFuncDefExpr(fn *ast.FuncDefExpr) error {
 	}
 
 	c.chunk.addOp1(OP_NIL, fn.StartLine())
+	return nil
+}
+
+func (c *Compiler) CompileTypeDefExpr(tp *ast.TypeDefExpr) error {
+	name := tp.Ident.Name
+
+	attributes := make([]string, 0, len(tp.Params))
+	for _, param := range tp.Params {
+		attributes = append(attributes, param.Name.Name)
+	}
+
+	typeValue := NewTypeValue(&Type{name, FunctionMap{}, attributes})
+	c.CompileConstant(typeValue, tp.StartLine())
+	nameId := c.getOrSetName(name)
+	c.chunk.addOp2(OP_PUT_GLOBAL_NAME, Op(nameId), tp.StartLine())
 	return nil
 }
 

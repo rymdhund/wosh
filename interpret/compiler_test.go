@@ -638,6 +638,20 @@ func TestMethodDef(t *testing.T) {
 	`)
 }
 
+func TestTypeDef(t *testing.T) {
+	run(t, `
+	type Foo(a: Int)
+
+	fn (f: Foo) bar() {
+		f.a + 1
+	}
+
+	x = Foo(3)
+	assert(x.a == 3, "Typedef 1")
+	assert(x.bar() == 4, "Typedef 2")
+	`)
+}
+
 func TestReturn(t *testing.T) {
 	assertInt(t, `
 	fn foo() { 

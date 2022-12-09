@@ -266,6 +266,16 @@ func (v *FuncDefExpr) String() string {
 	return "tbd"
 }
 
+type TypeDefExpr struct {
+	Ident  *Ident
+	Params []*ParamExpr
+	lexer.Area
+}
+
+func (v *TypeDefExpr) String() string {
+	return "type"
+}
+
 type ListExpr struct {
 	Elems []Expr
 	lexer.Area

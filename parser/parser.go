@@ -622,6 +622,7 @@ func (p *Parser) parseSubscrHelper() ([]ast.Expr, lexer.Area, bool) {
 //	| IfExpr
 //	| ForExpr
 //	| FnDefExpr
+//	| TypeExpr
 //	| BasicLit
 //	| Identifier
 //	| Enclosure
@@ -630,6 +631,15 @@ func (p *Parser) parseAtomExpr() (ast.Expr, bool) {
 	if ok {
 		return iff, true
 	}
+
+	/*
+		subParsers := []func()(ast.Expr, bool) {
+			p.parseForExpr,
+			p.parseFnDefExpr,
+		}
+		return parseAny(subParsers)
+	*/
+
 	forExpr, ok := p.parseForExpr()
 	if ok {
 		return forExpr, true
@@ -637,6 +647,10 @@ func (p *Parser) parseAtomExpr() (ast.Expr, bool) {
 	fn, ok := p.parseFnDefExpr()
 	if ok {
 		return fn, true
+	}
+	typ, ok := p.parseTypeDefExpr()
+	if ok {
+		return typ, true
 	}
 	tryExpr, ok := p.parseTryExpr()
 	if ok {
@@ -669,6 +683,16 @@ func (p *Parser) parseAtomExpr() (ast.Expr, bool) {
 	brc, ok := p.parseBraceExpr()
 	if ok {
 		return brc, true
+	}
+	return nil, false
+}
+
+func parseAny(parsers []func() (ast.Expr, bool)) (ast.Expr, bool) {
+	for _, p := range parsers {
+		expr, ok := p()
+		if ok {
+			return expr, true
+		}
 	}
 	return nil, false
 }
@@ -988,6 +1012,32 @@ func (p *Parser) parseDoExpr() (ast.Expr, bool) {
 
 	a := p.tokens.commit()
 	return &ast.DoExpr{ident, args, a}, ok
+}
+
+func (p *Parser) parseTypeDefExpr() (ast.Expr, bool) {
+	p.tokens.begin()
+
+	ok := p.tokens.expect(lexer.TYPE)
+	if !ok {
+		p.tokens.rollback()
+		return nil, false
+	}
+
+	ident, ok := p.parseIdent()
+	if !ok {
+		p.error("Expected a type name", p.tokens.peek().Area)
+		p.tokens.rollback()
+		return nil, false
+	}
+
+	paramList, err := p.parseParamList()
+	if err != nil {
+		p.codeError(err)
+		return nil, false
+	}
+
+	a := p.tokens.commit()
+	return &ast.TypeDefExpr{ident, paramList, a}, true
 }
 
 func (p *Parser) parseFnDefExpr() (ast.Expr, bool) {

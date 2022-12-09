@@ -60,11 +60,17 @@ func builtinLen(v Value) Value {
 	switch x := v.(type) {
 	case *ListValue:
 		return NewInt(x.len)
+	case *MapValue:
+		return NewInt(len(x.Map))
 	case *StringValue:
 		return NewInt(utf8.RuneCountInString(x.Val))
 	default:
 		panic(fmt.Sprintf("%v does not support len()", v))
 	}
+}
+
+func builtinStr(value Value) Value {
+	return NewString(value.String())
 }
 
 func builtinPrintln(value Value) Value {
@@ -108,24 +114,26 @@ func builtinItems(v Value) Value {
 	}
 }
 
-func builtinType(v Value) Value {
+func builtinTypeof(v Value) Value {
 	return NewTypeValue(v.Type())
 }
 
 func NewVm() *VM {
 	globals := map[string]Value{}
 	globals["readlines"] = NewBuiltin("readlines", 1, builtinReadlines)
+	globals["str"] = NewBuiltin("str", 1, builtinStr)
 	globals["println"] = NewBuiltin("println", 1, builtinPrintln)
 	globals["atoi"] = NewBuiltin("atoi", 1, builtinAtoi)
 	globals["len"] = NewBuiltin("len", 1, builtinLen)
 	globals["ord"] = NewBuiltin("ord", 1, builtinOrd)
 	globals["assert"] = NewBuiltin("assert", 2, builtinAssert)
 	globals["items"] = NewBuiltin("items", 1, builtinItems)
-	globals["type"] = NewBuiltin("type", 1, builtinType)
+	globals["typeof"] = NewBuiltin("typeof", 1, builtinTypeof)
 
+	globals["Nil"] = NewTypeValue(BoolType)
 	globals["Bool"] = NewTypeValue(BoolType)
 	globals["Int"] = NewTypeValue(IntType)
-	globals["String"] = NewTypeValue(StringType)
+	globals["Str"] = NewTypeValue(StringType)
 	globals["List"] = NewTypeValue(ListType)
 	globals["Map"] = NewTypeValue(MapType)
 
@@ -389,7 +397,11 @@ func (vm *VM) run() (Value, error) {
 			method := frame.readName()
 			// TODO: make this part of the vm
 			closure := frame.popStack().(*ClosureValue)
-			types[class].Methods[method] = closure.Function
+			typ, ok := vm.globals[class].(*TypeValue)
+			if !ok {
+				err = frame.runtimeError("Trying to define method on non-class")
+			}
+			typ.typ.Methods[method] = closure.Function
 		case OP_CALL:
 			arity := int(frame.readCode())
 			vm.opCall(arity)
@@ -399,7 +411,7 @@ func (vm *VM) run() (Value, error) {
 			vm.opCallMethod(arity, method)
 		case OP_ATTR:
 			attr := frame.readName()
-			vm.opAttr(attr)
+			err = vm.opAttr(attr)
 		case OP_SET_HANDLER:
 			effect := frame.readName()
 			handlerIp := frame.readUint16()
@@ -453,14 +465,13 @@ func (frame *CallFrame) opLess() error {
 	switch l := a.(type) {
 	case *IntValue:
 		r, ok := b.(*IntValue)
-		if !ok {
-			return fmt.Errorf("Trying to compare less between %s and %s", a.Type().Name, b.Type().Name)
+		if ok {
+			frame.pushStack(NewBool(l.Val < r.Val))
+			return nil
 		}
-		frame.pushStack(NewBool(l.Val < r.Val))
-		return nil
 	default:
-		return fmt.Errorf("Trying to compare less between %s and %s", a.Type().Name, b.Type().Name)
 	}
+	return frame.runtimeError(fmt.Sprintf("Trying to compare less between %s and %s", a.Type().Name, b.Type().Name))
 
 }
 
@@ -751,6 +762,16 @@ func (vm *VM) opCall(arity int) {
 		} else {
 			panic(fmt.Sprintf("Not implemented arity: %d", arity))
 		}
+	case *TypeValue:
+		// Constructor
+		if arity != len(fn.typ.Attributes) {
+			panic(fmt.Sprintf("Calling constructor '%s' with wrong number of arguments, expected %d", fn.typ.Name, arity))
+		}
+		attributes := make([]Value, arity)
+		for i := 0; i < arity; i++ {
+			attributes[i] = frame.popStack()
+		}
+		frame.pushStack(NewCustom(fn.typ, attributes))
 	default:
 		panic(fmt.Sprintf("Trying to call non closure and non builtin: %v", frame.peekStack(arity)))
 	}
@@ -765,7 +786,8 @@ func (vm *VM) opCallMethod(arity int, name string) {
 	if ok {
 		method, ok := t.typ.Methods[name]
 		if !ok {
-			panic(fmt.Sprintf("No such attribute: %s on %s", name, obj.Type()))
+			methods := strings.Join(t.typ.MethodNames(), ", ")
+			panic(fmt.Sprintf("No such attribute: %s on %s. Has these methods: %s", name, obj.Type().Name, methods))
 		}
 		closure := NewClosure(method, []*BoxValue{})
 		frame.replaceStack(arity, closure)
@@ -775,7 +797,8 @@ func (vm *VM) opCallMethod(arity int, name string) {
 
 	method, ok := obj.Type().Methods[name]
 	if !ok {
-		panic(fmt.Sprintf("No such method: %s on %s", name, obj.Type()))
+		methods := strings.Join(obj.Type().MethodNames(), ", ")
+		panic(fmt.Sprintf("No such attribute: %s on %s. Has these methods: %s", name, obj.Type().Name, methods))
 	}
 
 	closure := NewClosure(method, []*BoxValue{})
@@ -785,23 +808,31 @@ func (vm *VM) opCallMethod(arity int, name string) {
 	frame.stackTop -= arity + 1
 }
 
-func (vm *VM) opAttr(name string) {
+func (vm *VM) opAttr(name string) error {
 	frame := vm.currentFrame
 	obj := frame.popStack()
 
-	// So far we only have attribute for type methods (like `List.head`)
-	t, ok := obj.(*TypeValue)
-	if ok {
+	switch t := obj.(type) {
+	case *TypeValue:
+		// Attribute for type methods (like `List.head`)
 		method, ok := t.typ.Methods[name]
 		if !ok {
-			panic(fmt.Sprintf("No such attribute: %s on %s", name, obj.Type()))
+			return frame.runtimeError(fmt.Sprintf("No such attribute: %s on %s", name, obj.Type().Name))
 		}
 		closure := NewClosure(method, []*BoxValue{})
 		frame.pushStack(closure)
-	} else {
-		panic(fmt.Sprintf("Cant fetch attribute from: %s on (%s)", obj, name))
-
+	case *CustomValue:
+		idx := 0
+		for ; idx < len(t.Attributes) && t.Type().Attributes[idx] != name; idx++ {
+		}
+		if idx > len(t.Attributes) {
+			return frame.runtimeError(fmt.Sprintf("No such attribute: %s on %s", name, obj.Type().Name))
+		}
+		frame.pushStack(t.Attributes[idx])
+	default:
+		return frame.runtimeError(fmt.Sprintf("Cant fetch attribute from: %s on (%s)", obj, name))
 	}
+	return nil
 }
 
 func (frame *CallFrame) findHandler(name string) *Handler {

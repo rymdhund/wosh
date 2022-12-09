@@ -30,20 +30,23 @@ const (
 	RBRACE
 	LBRACKET
 	RBRACKET
+	ARROW
+	SINGLE_ARROW
+	AT
+	COMMENT
+
+	// Keywords
 	IF
 	ELSE
 	FN
-	COMMENT
 	FOR
 	TRY
 	HANDLE
 	DO
 	RESUME
 	RETURN
-	ARROW
-	SINGLE_ARROW
-	AT
 	IMPORT
+	TYPE
 )
 
 var tokens = []string{
@@ -68,6 +71,9 @@ var tokens = []string{
 	RBRACE:       "}",
 	LBRACKET:     "[",
 	RBRACKET:     "]",
+	ARROW:        "=>",
+	SINGLE_ARROW: "->",
+	AT:           "@",
 	PIPE_OP:      "PIPE_OP",
 	CAPTURE:      "CAPTURE",
 	IF:           "IF",
@@ -80,10 +86,8 @@ var tokens = []string{
 	DO:           "DO",
 	RESUME:       "RESUME",
 	RETURN:       "RETURN",
-	ARROW:        "=>",
-	SINGLE_ARROW: "->",
-	AT:           "@",
 	IMPORT:       "IMPORT",
+	TYPE:         "TYPE",
 }
 
 func (t Token) String() string {
@@ -397,6 +401,8 @@ func (l *Lexer) lexIdentOrKw() TokenItem {
 		return TokenItem{RETURN, lit, l.step(len(lit))}
 	case "import":
 		return TokenItem{IMPORT, lit, l.step(len(lit))}
+	case "type":
+		return TokenItem{TYPE, lit, l.step(len(lit))}
 	default:
 		return TokenItem{IDENT, lit, l.step(len(lit))}
 	}

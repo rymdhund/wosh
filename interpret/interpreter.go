@@ -244,10 +244,8 @@ func (vm *VM) run() (Value, error) {
 			frame.stackTop -= len(frame.closure.Function.Chunk.LocalNames)
 			// todo: clean up references for garbage collection
 
-			if DEBUG_TRACE {
-				if frame.stackTop != 0 {
-					panic("expected empty stack")
-				}
+			if frame.stackTop != 0 {
+				panic("expected empty stack")
 			}
 
 			// todo: clean up memory
@@ -596,7 +594,7 @@ func (frame *CallFrame) opAdd() (bool, error) {
 		frame.pushStack(res)
 		return true, nil
 	}
-	return true, nil
+	return false, nil
 }
 
 func (frame *CallFrame) opMult() (bool, error) {
@@ -768,9 +766,10 @@ func (vm *VM) opCall(arity int) {
 			panic(fmt.Sprintf("Calling constructor '%s' with wrong number of arguments, expected %d", fn.typ.Name, arity))
 		}
 		attributes := make([]Value, arity)
-		for i := 0; i < arity; i++ {
+		for i := arity - 1; i >= 0; i-- {
 			attributes[i] = frame.popStack()
 		}
+		frame.popStack() // pop type
 		frame.pushStack(NewCustom(fn.typ, attributes))
 	default:
 		panic(fmt.Sprintf("Trying to call non closure and non builtin: %v", frame.peekStack(arity)))
@@ -825,7 +824,7 @@ func (vm *VM) opAttr(name string) error {
 		idx := 0
 		for ; idx < len(t.Attributes) && t.Type().Attributes[idx] != name; idx++ {
 		}
-		if idx > len(t.Attributes) {
+		if idx >= len(t.Attributes) {
 			return frame.runtimeError(fmt.Sprintf("No such attribute: %s on %s", name, obj.Type().Name))
 		}
 		frame.pushStack(t.Attributes[idx])

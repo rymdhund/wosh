@@ -497,7 +497,7 @@ func (t *BuiltinValue) Type() *Type {
 }
 
 func (t *BuiltinValue) String() string {
-	return fmt.Sprintf("builtin %s(%s, %d)", t.Type().Name, t.Name, t.Arity)
+	return fmt.Sprintf("%s(%s, %d)", t.Type().Name, t.Name, t.Arity)
 }
 
 func NewBuiltin(name string, arity int, function interface{}) *BuiltinValue {

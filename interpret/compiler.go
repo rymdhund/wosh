@@ -716,6 +716,7 @@ func (c *Compiler) CompileTypeDefExpr(tp *ast.TypeDefExpr) error {
 	c.CompileConstant(typeValue, tp.StartLine())
 	nameId := c.getOrSetName(name)
 	c.chunk.addOp2(OP_PUT_GLOBAL_NAME, Op(nameId), tp.StartLine())
+	c.chunk.addOp1(OP_NIL, tp.StartLine())
 	return nil
 }
 

@@ -640,15 +640,31 @@ func TestMethodDef(t *testing.T) {
 
 func TestTypeDef(t *testing.T) {
 	run(t, `
-	type Foo(a: Int)
+		type Foo(a: Int)
+	
+		fn (f: Foo) bar() {
+			f.a + 1
+		}
+	
+		x = Foo(3)
+		assert(x.a == 3, "Typedef 1")
+		assert(x.bar() == 4, "Typedef 2")
+		`)
 
-	fn (f: Foo) bar() {
-		f.a + 1
-	}
+	run(t, `
+		type Coord(x: Int, y: Int)
 
-	x = Foo(3)
-	assert(x.a == 3, "Typedef 1")
-	assert(x.bar() == 4, "Typedef 2")
+		fn (c: Coord) add(c2) {
+		println("add")
+		println(c)
+		println(c2)
+		Coord(c.x + c2.x, c.y + c2.y)
+		}
+
+		a = Coord(2, 2)
+		b = Coord(3, 4)
+		c = a + b
+		assert(c.x == 5, "error")
 	`)
 }
 

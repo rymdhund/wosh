@@ -3,6 +3,7 @@ package interpret
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/rymdhund/wosh/ast"
 	"github.com/rymdhund/wosh/lexer"
@@ -278,7 +279,7 @@ func (c *Compiler) CompileBasicLit(lit *ast.BasicLit) error {
 		}
 		c.CompileConstant(NewInt(n), lit.StartLine())
 	case lexer.STRING:
-		c.CompileStringLit(lit)
+		return c.CompileStringLit(lit)
 	case lexer.BOOL:
 		if lit.Value == "true" {
 			c.chunk.addOp1(OP_TRUE, lit.StartLine())
@@ -295,9 +296,34 @@ func (c *Compiler) CompileBasicLit(lit *ast.BasicLit) error {
 	return nil
 }
 
-func (c *Compiler) CompileStringLit(lit *ast.BasicLit) {
-	s := lit.Value[1 : len(lit.Value)-1]
-	c.CompileConstant(NewString(s), lit.StartLine())
+func (c *Compiler) CompileStringLit(lit *ast.BasicLit) error {
+	runes := []rune(lit.Value[1 : len(lit.Value)-1])
+	sb := strings.Builder{}
+	for i := 0; i < len(runes); i++ {
+		if runes[i] == '\\' {
+			if i+1 >= len(runes) {
+				return codeError(lit, "Error in string literal: '\\'")
+			}
+			switch runes[i+1] {
+			case 'n':
+				sb.WriteRune('\n')
+			case 't':
+				sb.WriteRune('\t')
+			case '"':
+				sb.WriteRune('"')
+			case '\'':
+				sb.WriteRune('\'')
+			default:
+				return codeError(lit, "Error in string literal: '\\'")
+			}
+			i++
+		} else {
+			sb.WriteRune(runes[i])
+		}
+	}
+
+	c.CompileConstant(NewString(sb.String()), lit.StartLine())
+	return nil
 }
 
 func (c *Compiler) CompileConstant(value Value, line int) {
@@ -416,8 +442,11 @@ func (c *Compiler) CompileMapExpr(m *ast.MapExpr) error {
 		if elem.Key.Kind != lexer.STRING {
 			panic("Unexpected map key")
 		}
-		c.CompileStringLit(elem.Key)
-		err := c.CompileExpr(elem.Val)
+		err := c.CompileStringLit(elem.Key)
+		if err != nil {
+			return err
+		}
+		err = c.CompileExpr(elem.Val)
 		if err != nil {
 			return err
 		}

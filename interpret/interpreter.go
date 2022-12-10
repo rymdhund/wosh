@@ -74,7 +74,12 @@ func builtinStr(value Value) Value {
 }
 
 func builtinPrintln(value Value) Value {
-	println(value.String())
+	switch v := value.(type) {
+	case *StringValue:
+		println(v.Val)
+	default:
+		println(value.String())
+	}
 	return Nil
 }
 

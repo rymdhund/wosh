@@ -119,7 +119,7 @@ func (t *StringValue) Type() *Type {
 }
 
 func (t *StringValue) String() string {
-	return fmt.Sprintf("%s(%v)", t.Type().Name, t.Val)
+	return fmt.Sprintf("%#v", t.Val)
 }
 
 func (t *StringValue) Len() int {
@@ -166,7 +166,7 @@ func (t *IntValue) Type() *Type {
 }
 
 func (t *IntValue) String() string {
-	return fmt.Sprintf("%s(%v)", t.Type().Name, t.Val)
+	return fmt.Sprintf("%d", t.Val)
 }
 
 type BoolValue struct {
@@ -178,7 +178,11 @@ func (t *BoolValue) Type() *Type {
 }
 
 func (t *BoolValue) String() string {
-	return fmt.Sprintf("%s(%v)", t.Type().Name, t.Val)
+	if t.Val {
+		return "true"
+	} else {
+		return "false"
+	}
 }
 
 type StackEntry struct {
@@ -227,7 +231,7 @@ func (t *NilValue) Type() *Type {
 }
 
 func (t *NilValue) String() string {
-	return "nil"
+	return "()"
 }
 
 type ListNode struct {

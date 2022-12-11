@@ -376,6 +376,8 @@ func (c *Compiler) CompileOpExpr(op *ast.OpExpr) error {
 		c.chunk.addOp1(OP_MULT, op.StartLine())
 	case "/":
 		c.chunk.addOp1(OP_DIV, op.StartLine())
+	case "%":
+		c.chunk.addOp1(OP_MOD, op.StartLine())
 	case "==":
 		c.chunk.addOp1(OP_EQ, op.StartLine())
 	case "!=":

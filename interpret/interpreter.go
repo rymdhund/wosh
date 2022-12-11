@@ -286,40 +286,42 @@ func (vm *VM) run() (Value, error) {
 			frame.pushStack(NewBool(false))
 		case OP_EQ:
 			ok := frame.opEq()
-			if !ok {
-				vm.opCallMethod(1, "eq")
+			if err == nil && !ok {
+				err = vm.opCallMethod(1, "eq")
 			}
 		case OP_NEG:
 			err = frame.opNeg()
 		case OP_ADD:
 			var ok bool
 			ok, err = frame.opAdd()
-			if !ok {
-				vm.opCallMethod(1, "add")
+			if err == nil && !ok {
+				err = vm.opCallMethod(1, "add")
 			}
 		case OP_SUB:
 			var ok bool
 			ok, err = frame.opSub()
-			if !ok {
-				vm.opCallMethod(1, "sub")
+			if err == nil && !ok {
+				err = vm.opCallMethod(1, "sub")
 			}
 		case OP_MULT:
 			var ok bool
 			ok, err = frame.opMult()
-			if !ok {
-				vm.opCallMethod(1, "mult")
+			if err == nil && !ok {
+				err = vm.opCallMethod(1, "mult")
 			}
 		case OP_DIV:
 			var ok bool
 			ok, err = frame.opDiv()
-			if !ok {
-				vm.opCallMethod(1, "div")
+			if err == nil && !ok {
+				err = vm.opCallMethod(1, "div")
 			}
+		case OP_MOD:
+			err = frame.opMod()
 		case OP_CONS:
 			var ok bool
 			ok, err = frame.opCons()
-			if !ok {
-				vm.opCallMethod(1, "cons")
+			if err == nil && !ok {
+				err = vm.opCallMethod(1, "cons")
 			}
 		case OP_SUB_SLICE:
 			err = frame.opSubSlice()
@@ -411,7 +413,7 @@ func (vm *VM) run() (Value, error) {
 		case OP_CALL_METHOD:
 			arity := int(frame.readCode())
 			method := frame.readName()
-			vm.opCallMethod(arity, method)
+			err = vm.opCallMethod(arity, method)
 		case OP_ATTR:
 			attr := frame.readName()
 			err = vm.opAttr(attr)
@@ -652,6 +654,22 @@ func (frame *CallFrame) opDiv() (bool, error) {
 	}
 }
 
+func (frame *CallFrame) opMod() error {
+	switch l := frame.peekStack(1).(type) {
+	case *IntValue:
+		b := frame.popStack()
+		a := frame.popStack()
+		r, ok := b.(*IntValue)
+		if !ok {
+			return frame.runtimeError(fmt.Sprintf("Trying to mod %s and %s", a.Type().Name, b.Type().Name))
+		}
+		frame.pushStack(NewInt(l.Val % r.Val))
+		return nil
+	default:
+		return frame.runtimeError(fmt.Sprintf("Cant do mod on %s", l))
+	}
+}
+
 func (frame *CallFrame) opCons() (bool, error) {
 	switch l := frame.peekStack(0).(type) {
 	case *ListValue:
@@ -691,7 +709,12 @@ func (frame *CallFrame) opSubSlice() error {
 		frame.pushStack(newList)
 	case *StringValue:
 		to := intOr(b, v.Len())
-		newString := NewString(string([]rune(v.Val)[from:to]))
+		s := []rune(v.Val)
+		if from > to {
+			return frame.runtimeError(fmt.Sprintf("Slice out of bounds %#v[%d:%d]", v.Val, from, to))
+		}
+
+		newString := NewString(string(s[from:to]))
 		frame.pushStack(newString)
 	default:
 		panic("Subslice on non-suported value")
@@ -781,7 +804,7 @@ func (vm *VM) opCall(arity int) {
 	}
 }
 
-func (vm *VM) opCallMethod(arity int, name string) {
+func (vm *VM) opCallMethod(arity int, name string) error {
 	frame := vm.currentFrame
 	obj := frame.peekStack(arity)
 
@@ -791,18 +814,18 @@ func (vm *VM) opCallMethod(arity int, name string) {
 		method, ok := t.typ.Methods[name]
 		if !ok {
 			methods := strings.Join(t.typ.MethodNames(), ", ")
-			panic(fmt.Sprintf("No such attribute: %s on %s. Has these methods: %s", name, obj.Type().Name, methods))
+			return frame.runtimeError(fmt.Sprintf("No such attribute: %s on type %s. Has these methods: %s", name, obj.Type().Name, methods))
 		}
 		closure := NewClosure(method, []*BoxValue{})
 		frame.replaceStack(arity, closure)
 		vm.opCall(arity)
-		return
+		return nil
 	}
 
 	method, ok := obj.Type().Methods[name]
 	if !ok {
 		methods := strings.Join(obj.Type().MethodNames(), ", ")
-		panic(fmt.Sprintf("No such attribute: %s on %s. Has these methods: %s", name, obj.Type().Name, methods))
+		return frame.runtimeError(fmt.Sprintf("No such attribute: %s on %s. Has these methods: %s", name, obj.Type().Name, methods))
 	}
 
 	closure := NewClosure(method, []*BoxValue{})
@@ -810,6 +833,7 @@ func (vm *VM) opCallMethod(arity int, name string) {
 	newFrame := vm.NewFrame(closure, frame.stack[frame.stackTop-arity-1:frame.stackTop], frame, frame.ip)
 	vm.currentFrame = newFrame
 	frame.stackTop -= arity + 1
+	return nil
 }
 
 func (vm *VM) opAttr(name string) error {

@@ -33,6 +33,7 @@ const (
 	OP_SUB
 	OP_MULT
 	OP_DIV
+	OP_MOD
 
 	// List operators
 	OP_SUBSCRIPT_BINARY
@@ -129,6 +130,7 @@ var op_names = []struct {
 	OP_SUB:              {"OP_SUB", 1},
 	OP_MULT:             {"OP_MULT", 1},
 	OP_DIV:              {"OP_DIV", 1},
+	OP_MOD:              {"OP_MOD", 1},
 	OP_SUBSCRIPT_BINARY: {"OP_SUBSCRIPT_BINARY", 1},
 	OP_SUBSCRIPT_ASSIGN: {"OP_SUBSCRIPT_ASSIGN", 1},
 	OP_CONS:             {"OP_CONS", 1},
@@ -288,6 +290,12 @@ func (chunk *Chunk) disassembleInstruction(offset int, w io.Writer) int {
 		chunk.simpleInstruction(instr.String(), w)
 	case OP_ADD, OP_CONS, OP_SUB_SLICE:
 		chunk.simpleInstruction(instr.String(), w)
+	case OP_MOD:
+		chunk.simpleInstruction(instr.String(), w)
+	case OP_MULT:
+		chunk.simpleInstruction(instr.String(), w)
+	case OP_SUB:
+		chunk.simpleInstruction(instr.String(), w)
 	case OP_SUBSCRIPT_BINARY:
 		chunk.simpleInstruction(instr.String(), w)
 	case OP_SUBSCRIPT_ASSIGN:
@@ -320,12 +328,12 @@ func (chunk *Chunk) disassembleInstruction(offset int, w io.Writer) int {
 		chunk.callMethodInstruction(instr.String(), offset, w)
 	case OP_CREATE_LIST:
 		chunk.createListInstruction(instr.String(), offset, w)
-	case OP_SET_HANDLER:
-		chunk.setHandler(instr.String(), offset, w)
-	case OP_POP_HANDLERS | OP_DO:
-		chunk.oneParamInstruction(instr.String(), offset, w)
 	case OP_TYPE:
 		chunk.simpleInstruction(instr.String(), w)
+	case OP_SET_HANDLER:
+		chunk.setHandler(instr.String(), offset, w)
+	case OP_POP_HANDLERS, OP_DO:
+		chunk.oneParamInstruction(instr.String(), offset, w)
 	case OP_CHECK:
 		chunk.simpleInstruction(instr.String(), w)
 	default:

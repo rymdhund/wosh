@@ -188,11 +188,10 @@ func (p *Parser) parseBlockExpr() (*ast.BlockExpr, bool) {
 	exprs := []ast.Expr{}
 	for {
 		expr, ok := p.parseMultiExpr()
-		if ok {
-			exprs = append(exprs, expr)
-		} else {
+		if !ok {
 			break
 		}
+		exprs = append(exprs, expr)
 
 		if !p.tokens.expect(lexer.EOL) {
 			break
@@ -406,8 +405,14 @@ func (p *Parser) parseCompExpr() (ast.Expr, bool) {
 //	| AddExpr <cons_op> ConsExpr
 //	| AddExpr
 func (p *Parser) parseConsExpr() (ast.Expr, bool) {
-	//return p.parseBinaryOpExpr([]string{"::"}, p.parseAddExpr)
-	return p.parseBinaryOpRightAssocExpr([]string{"::"}, p.parseAddExpr)
+	return p.parseBinaryOpRightAssocExpr([]string{"::"}, p.parseModExpr)
+}
+
+// ModExpr ->
+//
+//	| AddExpr (<add_op> ModExprExpr)*
+func (p *Parser) parseModExpr() (ast.Expr, bool) {
+	return p.parseBinaryOpExpr([]string{"%"}, p.parseAddExpr)
 }
 
 // AddExpr ->
@@ -652,6 +657,10 @@ func (p *Parser) parseAtomExpr() (ast.Expr, bool) {
 	if ok {
 		return typ, true
 	}
+	//matchExpr, ok := p.parseMatchExpr()
+	//if ok {
+	//	return matchExpr, true
+	//}
 	tryExpr, ok := p.parseTryExpr()
 	if ok {
 		return tryExpr, true
@@ -833,6 +842,39 @@ func (p *Parser) parseForExpr() (ast.Expr, bool) {
 	return &ast.ForExpr{cond, then, a}, true
 }
 
+/*
+func (p *Parser) parseMatchExpr() (ast.Expr, bool) {
+	p.tokens.begin()
+
+	ok := p.tokens.expect(lexer.MATCH)
+	if !ok {
+		p.tokens.rollback()
+		return nil, false
+	}
+
+	p.tokens.beginEolSignificance(false)
+
+	expr, ok := p.parseExpr()
+	if !ok {
+		p.error("Expected expression", p.tokens.peek().Area)
+		p.tokens.popEolSignificance()
+		p.tokens.rollback()
+		return nil, false
+	}
+
+	matchCases, ok := p.parseMatchBlock()
+	p.tokens.popEolSignificance()
+	if !ok {
+		p.tokens.rollback()
+		return nil, false
+	}
+
+	a := p.tokens.commit()
+	return &ast.MatchExpr{expr, matchCases, a}, true
+
+}
+*/
+
 func (p *Parser) parseTryExpr() (ast.Expr, bool) {
 	p.tokens.begin()
 
@@ -845,24 +887,11 @@ func (p *Parser) parseTryExpr() (ast.Expr, bool) {
 	// ignore EOL
 	p.tokens.beginEolSignificance(false)
 
-	_, ok = p.tokens.expectGet(lexer.LBRACE)
+	then, ok := p.parseBracedBlock("try")
 	if !ok {
-		p.error(fmt.Sprintf("Expected '{' after try, found %s", p.tokens.peek().Lit), p.tokens.peek().Area)
 		p.tokens.popEolSignificance()
 		p.tokens.rollback()
 		return nil, false
-	}
-
-	then, ok := p.parseBlockExpr()
-	if !ok {
-		// TODO
-		panic("not implemented error case")
-	}
-
-	_, ok = p.tokens.expectGet(lexer.RBRACE)
-	if !ok {
-		// TODO
-		panic("not implemented error case")
 	}
 
 	ok = p.tokens.expect(lexer.HANDLE)
@@ -873,25 +902,8 @@ func (p *Parser) parseTryExpr() (ast.Expr, bool) {
 		return nil, false
 	}
 
-	_, ok = p.tokens.expectGet(lexer.LBRACE)
+	matchCases, ok := p.parseHandleBlock()
 	if !ok {
-		// TODO
-		panic("not implemented else expr '{' error case")
-	}
-
-	matchCases := []*ast.MatchCaseExpr{}
-
-	for true {
-		matchCase, ok := p.parseMatchCase()
-		if !ok {
-			break
-		}
-		matchCases = append(matchCases, matchCase)
-	}
-
-	_, ok = p.tokens.expectGet(lexer.RBRACE)
-	if !ok {
-		p.error(fmt.Sprintf("Expected '}', found %s", p.tokens.peek().Lit), p.tokens.peek().Area)
 		p.tokens.popEolSignificance()
 		p.tokens.rollback()
 		return nil, false
@@ -902,7 +914,61 @@ func (p *Parser) parseTryExpr() (ast.Expr, bool) {
 	return &ast.TryExpr{then, matchCases, a}, true
 }
 
-func (p *Parser) parseMatchCase() (*ast.MatchCaseExpr, bool) {
+func (p *Parser) parseHandleBlock() ([]*ast.HandleCaseExpr, bool) {
+	p.tokens.begin()
+
+	ok := p.tokens.expect(lexer.LBRACE)
+	if !ok {
+		p.error("Expected \"{\"", p.tokens.peek().Area)
+		p.tokens.rollback()
+		return nil, false
+	}
+
+	handleCases := []*ast.HandleCaseExpr{}
+
+	for !p.tokens.expect(lexer.RBRACE) {
+		matchCase, ok := p.parseHandleCase()
+		if !ok {
+			p.error("Expected '}'", p.tokens.peek().Area)
+			p.tokens.rollback()
+			return nil, false
+		}
+		handleCases = append(handleCases, matchCase)
+	}
+
+	p.tokens.commit()
+	return handleCases, true
+}
+
+/*
+func (p *Parser) parseMatchBlock() ([]*ast.MatchCaseExpr, bool) {
+	p.tokens.begin()
+
+	ok := p.tokens.expect(lexer.LBRACE)
+	if !ok {
+		p.error("Expected \"{\"", p.tokens.peek().Area)
+		p.tokens.rollback()
+		return nil, false
+	}
+
+	matchCases := []*ast.MatchCaseExpr{}
+
+	for !p.tokens.expect(lexer.RBRACE) {
+		matchCase, ok := p.parseMatchCase()
+		if !ok {
+			p.error("Expected '}'", p.tokens.peek().Area)
+			p.tokens.rollback()
+			return nil, false
+		}
+		matchCases = append(matchCases, matchCase)
+	}
+
+	p.tokens.commit()
+	return matchCases, true
+}
+*/
+
+func (p *Parser) parseHandleCase() (*ast.HandleCaseExpr, bool) {
 	p.tokens.begin()
 	startIdx := p.tokens.idx
 
@@ -955,27 +1021,15 @@ func (p *Parser) parseMatchCase() (*ast.MatchCaseExpr, bool) {
 		return nil, false
 	}
 
-	_, ok = p.tokens.expectGet(lexer.LBRACE)
-	if !ok {
-		p.error("Expected '{'", p.tokens.peek().Area)
-		p.tokens.rollback()
-		return nil, false
-	}
-
-	block, ok := p.parseBlockExpr()
-	if !ok {
-		panic("not implemented error case")
-	}
-
-	_, ok = p.tokens.expectGet(lexer.RBRACE)
-	if !ok {
-		p.error("Expected '}'", p.tokens.peek().Area)
+	block, err := p.parseBracedBlockOrSingleExpr()
+	if err != nil {
+		p.codeError(err)
 		p.tokens.rollback()
 		return nil, false
 	}
 
 	a := p.tokens.commit()
-	return &ast.MatchCaseExpr{
+	return &ast.HandleCaseExpr{
 		Pattern: &ast.PatternExpr{
 			Ident:  ident,
 			Params: params,
@@ -1087,18 +1141,12 @@ func (p *Parser) parseFnDefExpr() (ast.Expr, bool) {
 	paramList, err := p.parseParamList()
 	if err != nil {
 		p.codeError(err)
+		p.tokens.rollback()
 		return nil, false
 	}
 
-	if !p.tokens.expect(lexer.LBRACE) {
-		// TODO
-		panic("ParseFnDef: Not implemented")
-	}
-
-	body, ok := p.parseBlockExpr()
-
-	if !p.tokens.expect(lexer.RBRACE) {
-		p.error(fmt.Sprintf("Expected end of for expr in function def, found %s", p.tokens.peek().Lit), p.tokens.peek().Area)
+	body, ok := p.parseBracedBlock("function")
+	if !ok {
 		p.tokens.rollback()
 		return nil, false
 	}
@@ -1350,13 +1398,13 @@ func (p *Parser) parseBinaryOpRightAssocExpr(operators []string, subParser func(
 	}
 }
 
-func (p *Parser) parseBracedBlock(name string) (ast.Expr, bool) {
+func (p *Parser) parseBracedBlock(name string) (*ast.BlockExpr, bool) {
 	p.tokens.begin()
 	p.tokens.beginEolSignificance(false)
 
 	ok := p.tokens.expect(lexer.LBRACE)
 	if !ok {
-		p.error(fmt.Sprintf("Expected \"{\" as start of %s-block, found %s", name, p.tokens.peek().Lit), p.tokens.peek().Area)
+		p.error(fmt.Sprintf("Expected \"{\" as start of %s-block, found %s", name), p.tokens.peek().Area)
 		p.tokens.popEolSignificance()
 		p.tokens.rollback()
 		return nil, false

@@ -678,6 +678,18 @@ func TestReturn(t *testing.T) {
 	`, 3)
 }
 
+func TestMatch(t *testing.T) {
+	//run(t, `
+	//x = match 3 {
+	//	1 => "a"
+	//	2 => "b"
+	//	3 => "c"
+	//}
+
+	//assert(x == "c", "match error")
+	//`)
+}
+
 func TestString(t *testing.T) {
 	assertRes(t, "'abc' + 'def'", NewString("abcdef"))
 	assertRes(t, "ord('a')", NewInt(97))
@@ -712,6 +724,8 @@ func TestSmall(t *testing.T) {
 		{"-2 - -2", NewInt(0)},
 		{"4 - 2 - 2", NewInt(0)},
 		{"4 / 2 / 2", NewInt(1)},
+		{"4 % 2", NewInt(0)},
+		{"5 % 2", NewInt(1)},
 		{"'abc'", NewString("abc")},
 		{"1 == 1", NewBool(true)},
 		{"1 != 1", NewBool(false)},

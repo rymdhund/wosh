@@ -38,6 +38,7 @@ const (
 	// Keywords
 	IF
 	ELSE
+	MATCH
 	FN
 	FOR
 	TRY
@@ -78,6 +79,7 @@ var tokens = []string{
 	CAPTURE:      "CAPTURE",
 	IF:           "IF",
 	ELSE:         "ELSE",
+	MATCH:        "MATCH",
 	FN:           "FN",
 	COMMENT:      "COMMENT",
 	FOR:          "FOR",
@@ -385,6 +387,8 @@ func (l *Lexer) lexIdentOrKw() TokenItem {
 		return TokenItem{IF, lit, l.step(len(lit))}
 	case "else":
 		return TokenItem{ELSE, lit, l.step(len(lit))}
+	case "match":
+		return TokenItem{MATCH, lit, l.step(len(lit))}
 	case "fn":
 		return TokenItem{FN, lit, l.step(len(lit))}
 	case "for":
@@ -410,7 +414,7 @@ func (l *Lexer) lexIdentOrKw() TokenItem {
 
 // Operators are sequences of +*-=!
 func isOp(r rune) bool {
-	return r == '+' || r == '-' || r == '*' || r == '/' || r == '=' || r == '!' || r == '>' || r == '<'
+	return r == '+' || r == '-' || r == '*' || r == '/' || r == '=' || r == '!' || r == '>' || r == '<' || r == '%'
 }
 
 func (l *Lexer) lexOp() TokenItem {

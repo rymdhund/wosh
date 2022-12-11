@@ -304,13 +304,33 @@ func (v *MapExpr) String() string {
 	return "tbd"
 }
 
+type MatchExpr struct {
+	Expr  Expr
+	Cases []*MatchCaseExpr
+	lexer.Area
+}
+
+func (v *MatchExpr) String() string {
+	return "Match - tbd"
+}
+
 type MatchCaseExpr struct {
+	Left Expr
+	Then *BlockExpr
+	lexer.Area
+}
+
+func (v *MatchCaseExpr) String() string {
+	return "tbd"
+}
+
+type HandleCaseExpr struct {
 	Pattern *PatternExpr
 	Then    *BlockExpr
 	lexer.Area
 }
 
-func (v *MatchCaseExpr) String() string {
+func (v *HandleCaseExpr) String() string {
 	return "tbd"
 }
 
@@ -328,7 +348,7 @@ func (v *PatternExpr) String() string {
 
 type TryExpr struct {
 	TryBlock    *BlockExpr
-	HandleBlock []*MatchCaseExpr
+	HandleBlock []*HandleCaseExpr
 	lexer.Area
 }
 
